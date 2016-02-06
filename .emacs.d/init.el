@@ -14,6 +14,14 @@
 (set-keyboard-coding-system nil)
 (scroll-bar-mode -1)
 (setq next-screen-context-lines 5)
+(setq inhibit-startup-screen t)
+(setq scroll-preserve-screen-position 1)
+;; Do not display Ediff control window in separate frame, since it cause problem in Fullscreen on Mac OS
+(setq ediff-window-setup-function 'ediff-setup-windows-plain)
+
+
+;; warn when opening files bigger than 100MB
+(setq large-file-warning-threshold 100000000)
 
 ;; delete trailing whitespace before file is saved
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
@@ -25,9 +33,6 @@
 
 (personal 'kbd-macros)
 
-(require 'recentf)
-(recentf-mode 1)
-
 (require 'package)
 (add-to-list 'package-archives
          '("melpa" . "http://melpa.milkbox.net/packages/") t)
@@ -35,11 +40,29 @@
          '("SC" . "http://joseito.republika.pl/sunrise-commander/") t)
 (package-initialize)
 
-
 (require 'smex)
 (smex-initialize)
 
 (require 'use-package)
+
+(use-package recentf
+  :config
+  (setq recentf-max-saved-items 500
+        recentf-max-menu-items 15
+        ;; disable recentf-cleanup on Emacs start, because it can cause
+        ;; problems with remote files
+        recentf-auto-cleanup 'never)
+  (recentf-mode +1))
+
+(use-package session
+  :init
+  (setq session-jump-undo-threshold 80) ; change positions must differ by 80 characters
+  (global-set-key [(control ?.)] 'session-jump-to-last-change))
+
+(use-package saveplace
+  :init
+  (setq-default save-place t)
+  (setq save-place-file "~/.emacs.d/saved-places"))
 
 (use-package ido-vertical-mode
   :config
@@ -64,19 +87,26 @@
   (add-hook 'ag-search-finished-hook (lambda () (pop-to-buffer next-error-last-buffer))))
 
 (use-package projectile
+  :demand
   ;; nice to have it on the modeline
   :init (setq
          projectile-use-git-grep t)
+  :ensure    projectile
   :config
-  (projectile-global-mode))
+  (projectile-global-mode)
+  :bind (("s-f" . projectile-find-file)
+	 ("s-F" . projectile-ag)))
 
 (use-package highlight-symbol
   :diminish highlight-symbol-mode
   :commands highlight-symbol
-  :bind ("s-h" . highlight-symbol)
-  :bind ("s-n" . highlight-symbol-next)
-  :bind ("s-p" . highlight-symbol-prev)
-  :bind ("s-r" . highlight-symbol-remove-all))
+  :bind (("s-h" . highlight-symbol)
+	 ("s-n" . highlight-symbol-next)
+	 ("s-p" . highlight-symbol-prev)
+	 ("s-r" . highlight-symbol-remove-all)))
+
+(use-package zygospore
+  :bind ("C-x 1" . zygospore-toggle-delete-other-windows))
 
 (use-package general-close
   :bind ("C-;" . general-close))
@@ -93,6 +123,13 @@
   :commands magit-status magit-blame
   :bind (("s-g" . magit-status)
          ("s-b" . magit-blame)))
+
+;;(use-package anzu
+;;  :ensure t
+;;  :bind (("M-%" . anzu-query-replace)
+;;         ("C-M-%" . anzu-query-replace-regexp))
+;;  :config
+;;  (global-anzu-mode))
 
 (require 'ido-vertical-mode)
 (ido-mode 1)
@@ -118,6 +155,16 @@
 
 (load-theme 'zenburn :no-confirm)
 
+(use-package tramp) ;; needed by crux
+
+(use-package crux
+  :ensure t
+  :bind (
+	 ("C-c f" . crux-recentf-ido-find-file)
+         ("M-k" . crux-smart-open-line)
+         ("s-k" . crux-kill-whole-line)
+         ("M-j" . crux-smart-open-line-above)))
+
 (defun scala-mode-newline-comments ()
   "Custom newline appropriate for `scala-mode'."
   ;; shouldn't this be in a post-insert hook?
@@ -133,24 +180,53 @@
    scala-indent:use-javadoc-style t
    scala-indent:align-parameters t)
   :config
-  (bind-key "RET" 'scala-mode-newline-comments scala-mode-map)
-  (bind-key "C-c c" 'sbt-command scala-mode-map)
-  (bind-key "M-SPC" 'scala-indent:fixup-whitespace)
-  (bind-key "C-M-j" 'scala-indent:join-line))
+  (bind-key "RET" `scala-mode-newline-comments scala-mode-map)
+  (bind-key "C-c c" `sbt-command scala-mode-map)
+  (bind-key "M-SPC" `scala-indent:fixup-whitespace)
+  (bind-key "C-M-j" `scala-indent:join-line))
+
+(use-package smartparens
+  :diminish smartparens-mode
+  :commands
+  ;;smartparens-strict-mode
+  smartparens-mode
+  sp-restrict-to-pairs-interactive
+  sp-local-pair
+  :init
+  (setq sp-interactive-dwim t)
+  :config
+  (require 'smartparens-config)
+  (sp-use-smartparens-bindings)
+  (sp-pair "(" ")" :wrap "C-(") ;; how do people live without this?
+  (sp-pair "[" "]" :wrap "C-s-[") ;; C-[ sends ESC
+  (sp-pair "{" "}" :wrap "C-{")
+  ;;(sp-local-pair '(c-mode java-mode scala-mode) "(" nil :post-handlers '(("||\n[i]" "RET")))
+  ;;(sp-local-pair '(c-mode java-mode) "{" nil :post-handlers '(("||\n[i]" "RET")))
+  (bind-key "C-<left>" nil smartparens-mode-map)
+  (bind-key "C-<right>" nil smartparens-mode-map)
+  (bind-key "M-<backspace>" nil smartparens-mode-map)
+  (bind-key "s-{" `sp-rewrap-sexp smartparens-mode-map)
+  (bind-key "s-[" `sp-backward-unwrap-sexp smartparens-mode-map))
 
 
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
             (rainbow-delimiters-mode)))
 
+;; assuming you put the repository in ~/.emacs.d/ensime
+(add-to-list 'load-path (concat user-emacs-directory "ensime-emacs"))
+
 (require 'ensime)
 (add-hook 'scala-mode-hook
 	  (lambda()
 	    (message "Running scala-mode-hook")
 	    (ensime-mode)
+	    (electric-pair-mode)
+	    (electric-indent-mode)
+	    (smartparens-mode) ;; smartparens must be below electric-*-modes
 	    (show-paren-mode)
-	    (subword-mode)))
-	    ;(git-gutter-mode)))
+	    (subword-mode)
+	    (git-gutter-mode)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
@@ -171,7 +247,7 @@
 ;;(define-key global-map (kbd "C-c C-SPC" ) 'ace-jump-mode)
 
 (require 'ace-jump-zap)
-(define-key global-map (kbd "C-z" ) 'ace-jump-zap-up-to-char)
+(define-key global-map (kbd "C-z" ) `ace-jump-zap-up-to-char)
 
 ;; set up ido mode
 (require `ido)
@@ -181,11 +257,12 @@
 
 ;;(global-unset-key (kbd "C-z"))
 
-(global-set-key (kbd "s-s") 'replace-string)
-(global-set-key (kbd "M-x") 'smex)
-(global-set-key (kbd "M-X") 'smex-major-mode-commands)
+(global-set-key (kbd "s-s") `replace-string)
+(global-set-key (kbd "M-x") `smex)
+(global-set-key (kbd "M-X") `smex-major-mode-commands)
 ;; This is your old M-x.
-(global-set-key (kbd "C-c C-c M-x") 'execute-extended-command)
+(global-set-key (kbd "C-c C-c M-x") `execute-extended-command)
+(global-set-key (kbd "M-o") `other-window)
 
 ;;;; taken from https://github.com/bbatsov/prelude/blob/05dc795f2befb192f6ab16ef66fbb632ca2e3189/core/prelude-core.el#L138
 (defun my/smarter-move-beginning-of-line (arg)
@@ -267,6 +344,8 @@ point reaches the beginning or end of the buffer, stop there."
     ("f024aea709fb96583cf4ced924139ac60ddca48d25c23a9d1cd657a2cf1e4728" "4aee8551b53a43a883cb0b7f3255d6859d766b6c5e14bcb01bed572fcbef4328" "4cf3221feff536e2b3385209e9b9dc4c2e0818a69a1cdb4b522756bcdf4e00a4" "628278136f88aa1a151bb2d6c8a86bf2b7631fbea5f0f76cba2a0079cd910f7d" "06f0b439b62164c6f8f84fdda32b62fb50b6d00e8b01c2208e55543a6337433a" "bb08c73af94ee74453c90422485b29e5643b73b05e8de029a6909af6a3fb3f58" "1b8d67b43ff1723960eb5e0cba512a2c7a2ad544ddb2533a90101fd1852b426e" "82d2cac368ccdec2fcc7573f24c3f79654b78bf133096f9b40c20d97ec1d8016" default)))
  '(delete-selection-mode t)
  '(fci-rule-color "#d6d6d6")
+ '(magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
+ '(sbt:default-command "~compile")
  '(vc-annotate-background nil)
  '(vc-annotate-color-map
    (quote

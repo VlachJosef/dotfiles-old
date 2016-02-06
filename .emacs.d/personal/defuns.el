@@ -16,20 +16,3 @@
 		   when (buffer-file-name buf)
 		   collect (buffer-name buf) into file-buffers
 		   finally return file-buffers))))))
-
-
-;;(copy-directory "~/develop-funkypanda/rinoa-proto/proto" "~/develop-funkyp;;anda/rinoa-server/src/main/protobuf" 'keep-time 'parents 'copy-contents)
-
-;;(if (cd "~/develop-funkypanda/rinoa-proto")
-;;    (progn (magit-fetch-all "")
-;;	   magit-pull-from-upstream ""))
-
-;;(list (magit-pull-arguments))
-
-;;(magit-get-tracked-branch)
-;;default-directory
-
-;;branch
-;;(--if-let)
-;;(magit-get-current-branch)
-;;(default-directory)
