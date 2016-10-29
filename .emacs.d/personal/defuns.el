@@ -194,7 +194,57 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _q_ quit"
   (with-shell-in-sbt-project
    (comint-send-eof)))
 
-(defun mongo (command)
+(defun restclient-suppress-by-default ()
   (interactive)
-  (with-shell-in-sbt-project
-   (comint-send-string (current-buffer) (concat sbt-root (format "run-mongo.sh %s" command) "\n"))))
+  (pcase current-prefix-arg
+      (`nil (define-key restclient-mode-map [remap restclient-http-send-current-suppress-response-buffer] 'restclient-http-send-current)
+            (define-key restclient-mode-map [remap restclient-http-send-current] 'restclient-http-send-current-suppress-response-buffer)
+            (message "rest-mode C-c command remapped."))
+      (`(,n . nil) ;; run with C-u
+       (define-key restclient-mode-map [remap restclient-http-send-current-suppress-response-buffer] nil)
+       (define-key restclient-mode-map [remap restclient-http-send-current] nil)
+       (message "rest-mode commands keys has been reseted."))))
+
+(defvar restclient:current-rest-calls-buffer nil)
+
+(defun restclient:call-last ()
+  (let ((cb (if restclient:current-rest-calls-buffer
+                restclient:current-rest-calls-buffer
+              (ido-completing-read "Switch to rest calls buffer: "
+                                   (cl-loop for buffer being the buffers
+                                            when (string-match "^restCalls.*" (buffer-name buffer))
+                                            collect (buffer-name buffer) into file-buffers
+                                            finally return file-buffers)))))
+    (setq restclient:current-rest-calls-buffer cb)
+    (with-current-buffer cb
+      (restclient-http-send-current-suppress-response-buffer))))
+
+(defun restclient:open-current-rest-calls ()
+  (if restclient:current-rest-calls-buffer
+      (switch-to-buffer-other-window restclient:current-rest-calls-buffer)
+    (message "No restCall buffer to open."))
+  )
+
+(defun restclient:reset-open-current-rest-calls ()
+  (setq restclient:current-rest-calls-buffer nil)
+  (message "restclient:current-rest-calls-buffer set to nil."))
+
+(defun restclient:save-some-buffer-and-make-rest-call ()
+  (interactive)
+  (pcase current-prefix-arg
+    (`nil
+     (if (equal (save-some-buffers) "(No files need saving)")
+         (restclient:call-last)
+       (restclient:hydra/body)))
+    (`(,n . nil) ;; run with C-u
+       (restclient:hydra/body))))
+
+(bind-key "C-c C-s" 'restclient:save-some-buffer-and-make-rest-call)
+
+(defhydra restclient:hydra ()
+  "
+Rest client: _s_ last _d_ open _r_ reset _q_ quit"
+  ("s" (restclient:call-last) nil :color blue)
+  ("d" (restclient:open-current-rest-calls) nil :color blue)
+  ("r" (restclient:reset-open-current-rest-calls) nil)
+  ("q" nil nil :color blue))
