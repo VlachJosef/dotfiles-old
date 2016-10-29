@@ -194,6 +194,11 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _q_ quit"
   (with-shell-in-sbt-project
    (comint-send-eof)))
 
+(defun mongo (command)
+  (interactive)
+  (with-shell-in-sbt-project
+   (comint-send-string (current-buffer) (concat sbt-root (format "run-mongo.sh %s" command) "\n"))))
+
 (defun restclient-suppress-by-default ()
   (interactive)
   (pcase current-prefix-arg
