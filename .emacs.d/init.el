@@ -1,5 +1,5 @@
 ;;; init.el --- Emacs configuration -*- lexical-binding: t; -*-
-(setq debug-on-error nil)
+(setq debug-on-error t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; This section is for global settings for built-in emacs parameters
 (setq
@@ -46,7 +46,8 @@
 
 ;;(add-hook 'sbt-mode-hook' (lambda () (add-hook 'before-save-hook 'clear-sbt-compilation-buffer)))
 (add-hook 'sbt-mode-hook (lambda ()
-			    (add-hook 'before-save-hook 'sbt-hydra:check-modified-buffers)))
+                           (define-key comint-mode-map [remap comint-write-output] 'restclient:save-single-buffer-and-make-rest-call)
+                           (add-hook 'before-save-hook 'sbt-hydra:check-modified-buffers)))
 
 ;;(add-hook 'after-save-hook 'sbt-run-previous-command)
 
@@ -93,8 +94,14 @@
 (package-initialize)
 
 ;; this needs to be after package-initialize to overwrite default melpa packages
+(add-to-list 'load-path "~/develop-ensime/ensime-emacs/")
 (add-to-list 'load-path "~/develop-ensime/emacs-sbt-mode/")
 (add-to-list 'load-path "~/develop-emacs/restclient.el/")
+(add-to-list 'load-path "~/.emacs.d/so-long/")
+
+(when (require 'so-long nil :noerror)
+  (so-long-enable)
+  (setq so-long-threshold 1000))
 
 
 ;;-(require 'smex)
@@ -198,9 +205,15 @@
 ;;-  :bind ("C-c C-j" . git-gutter:revert-hunk))
 
 (use-package magit
+  :init
+  (setq magit-visit-ref-behavior '(checkout-any focus-on-ref))
   :commands magit-status magit-blame
   :bind (("s-g" . magit-status)
          ("s-b" . magit-blame)))
+
+;; (use-package magit-gh-pulls
+;;   :init
+;;   (add-hook 'magit-mode-hook 'turn-on-magit-gh-pulls))
 
 (add-hook 'js-mode-hook
           (lambda ()
@@ -228,10 +241,11 @@
 
 (use-package sbt-mode
   :init
-  (setq sbt:scroll-to-bottom-on-output nil))
+  (setq sbt:scroll-to-bottom-on-output nil)
+  :bind (("C-c C-s" . restclient:save-single-buffer-and-make-rest-call)))
 
 (use-package sbt-mode-hydra
-  :bind (("C-c v" . sbt-hydra:hydra)))
+  :bind (("C-c v" . sbt-hydra)))
 
 (use-package company
   ;;:diminish company-mode
@@ -266,6 +280,7 @@
 (load "~/.emacs.d/personal/defuns")
 (load "~/.emacs.d/personal/pure360")
 (load "~/.emacs.d/personal/private")
+(load "~/.emacs.d/lambdacalc.el")
 
 (personal 'kbd-macros)
 
@@ -406,6 +421,7 @@
    ensime-refactor-enable-beta t
    ensime-refactor-preview t
    ensime-refactor-preview-override-hunk 10
+   ensime-startup-notification nil
    sbt:default-command "projects"
    ;;sbt:prompt-regexp "^\\[.*\\]>[ ]*"
    )
@@ -413,7 +429,8 @@
 
   ;;(bind-key "s-n" 'ensime-search ensime-mode-map)
   (bind-key "s-t" 'ensime-print-type-at-point ensime-mode-map)
-  (bind-key "M-." 'ensime-edit-definition-with-fallback ensime-mode-map))
+  ;;(bind-key "M-." 'ensime-edit-definition-with-fallback ensime-mode-map)
+  )
 
 (add-hook 'scala-mode-hook
 	  (lambda()
@@ -490,6 +507,71 @@
 (global-set-key (kbd "C-c C-c M-x") `execute-extended-command)
 (global-set-key (kbd "M-o") `other-window)
 (global-set-key (kbd "s-W") `toggle-truncate-lines)
+
+
+;; Haskell
+;;(autoload 'ghc-init "ghc" nil t)
+;;(autoload 'ghc-debug "ghc" nil t)
+;;(add-hook 'haskell-mode-hook (lambda () (ghc-init)))
+;; (add-hook 'haskell-mode-hook
+;;   (lambda ()
+;;     (setq company-backends '(company-ghc))))
+
+(use-package ghc
+  :disabled t
+  :ensure t
+  :init (ghc-init))
+
+(use-package anzu
+  :commands (isearch-foward isearch-backward)
+  :config (global-anzu-mode))
+
+(use-package company-ghc
+  :ensure t
+  :config
+  (add-to-list 'company-backends
+	       '(company-ghc :with company-dabbrev-code))
+  (custom-set-variables '(company-ghc-show-info t)))
+(add-to-list 'company-backends 'company-ghc)
+
+;; hindent - format haskell code automatically
+;; https://github.com/chrisdone/hindent
+(when (executable-find "hindent")
+  (use-package hindent
+    ;;:diminish hindent-mode
+    :config
+    (add-hook 'haskell-mode-hook #'hindent-mode)
+    (setq hindent-reformat-buffer-on-save t)))
+
+(when (executable-find "structured-haskell-mode")
+  (use-package shm
+    :config
+    (add-hook 'haskell-mode-hook #'structured-haskell-mode)))
+
+(add-hook 'haskell-mode-hook (lambda ()
+                               (subword-mode)
+                               (interactive-haskell-mode)
+                               (haskell-indentation-mode)
+                               (smartparens-mode)
+                               (company-mode)
+                               (rainbow-delimiters-mode)
+                               (ghc-init)))
+
+(add-hook 'haskell-interactive-mode-hook (lambda ()
+                                           (subword-mode)
+                                           (smartparens-mode)
+                                           (rainbow-delimiters-mode)
+                                           (company-mode)))
+
+(add-hook 'minibuffer-setup-hook #'subword-mode)
+
+(defun go-to-source-when-only-one-match ()
+  (when (re-search-forward "^1 matches$" nil t 1)
+    (let ((ag-window (get-buffer-window (current-buffer))))
+      (next-error)
+      (delete-window ag-window))))
+
+(add-hook 'ag-search-finished-hook #'go-to-source-when-only-one-match)
 
 ;;;; taken from https://github.com/bbatsov/prelude/blob/05dc795f2befb192f6ab16ef66fbb632ca2e3189/core/prelude-core.el#L138
 (defun my/smarter-move-beginning-of-line (arg)
@@ -602,8 +684,12 @@ point reaches the beginning or end of the buffer, stop there."
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(company-ghc-show-info t)
  '(ensime-sbt-perform-on-save "compile")
- '(magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256"))))
+ '(magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
+ '(package-selected-packages
+   (quote
+    (zygospore zenburn-theme yaml-mode which-key web-mode visual-regexp use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress noccur markdown-mode magit-gh-pulls key-chord js2-mode ivy inf-mongo ido-vertical-mode hydra hindent highlight-symbol groovy-mode grizzl git-timemachine general-close furl flycheck ensime csv-mode crux company-ghc cider cask bm beacon avy auto-compile anzu ag actionscript-mode ace-jump-zap))))
 (put 'narrow-to-region 'disabled nil)
 (put 'narrow-to-page 'disabled nil)
 

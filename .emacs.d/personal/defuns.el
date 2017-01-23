@@ -1,5 +1,7 @@
 ;;; Personal functions
 
+(require 'cl-lib)
+
 ;; For loading personal configurations
 (defun personal (library)
   (load (concat "~/.emacs.d/personal/" (symbol-name library)) 'no-error))
@@ -57,8 +59,9 @@
 	      (setq value (cons (concat prefix element) value)))))
       (size nil)))) ; input is broken, it is not valid scala import, let's return empty list
 
-(defun normalize-and-sort (input)
-  (sort (apply #'append (mapcar 'normalize-import input)) 'string<))
+(defun normalize-and-sort (input search-term)
+  (let ((all-imports (sort (apply #'append (mapcar 'normalize-import input)) 'string<)))
+    (cl-remove-if-not (lambda (import) (string-match search-term import)) all-imports)))
 
 (defun search-import (search-term)
   "Use ag to search lines in project starting with keyword import and containing text `search-term'
@@ -73,17 +76,18 @@ Prefix arguments:
    (list (read-from-minibuffer
           (projectile-prepend-project-name "Ag search for import: ")
           (projectile-symbol-or-selection-at-point))))
-  (let ((normalization-function)
+  (let ((identity2 (lambda (input search-term) input))
+        (normalization-function)
 	(copy-to-kill-ring))
     (pcase current-prefix-arg
       (`nil (setq normalization-function `normalize-and-sort)
-	    (setq copy-to-kill-ring nil))
-      (`- (setq normalization-function `identity)
+	    (setq copy-to-kill-ring nil) `identity2)
+      (`- (setq normalization-function (lambda (input search-term) input))
 	  (setq copy-to-kill-ring nil))
       (`(,n . nil) (if (< 0 n)
 		       (progn (setq normalization-function `normalize-and-sort)
 			      (setq copy-to-kill-ring t))
-		     (progn (setq normalization-function `identity)
+		     (progn (setq normalization-function `identity2)
 			    (setq copy-to-kill-ring t)))))
     (if (and (executable-find "ag") (executable-find "sort") (executable-find "uniq"))
 	(let* ((default-directory (projectile-project-root))
@@ -92,7 +96,7 @@ Prefix arguments:
 	       (import (with-temp-buffer
 			 (insert (mapconcat (lambda (elm) (s-trim-left elm)) lines "\n"))
 			 (sort-lines nil (point-min) (point-max))
-			 (ido-completing-read "Select an import: " (funcall normalization-function (split-string (buffer-string) "\n"))))))
+			 (ido-completing-read "Select an import: " (funcall normalization-function (split-string (buffer-string) "\n") search-term)))))
 	  (if copy-to-kill-ring
 	      (progn (kill-new (format "import %s" import))
 		     (message "%s added to kill ring" import))
@@ -101,7 +105,7 @@ Prefix arguments:
 
 (define-key global-map (kbd "s-i" ) `search-import)
 
-(define-key global-map (kbd "C-x 4 s" ) `sbt:switch-to-active-sbt-buffer)
+(define-key global-map (kbd "C-x 4 s" ) `sbt-switch-to-active-sbt-buffer)
 
 ;; Taken from
 ;; https://www.emacswiki.org/emacs/KeyboardMacrosTricks
@@ -127,22 +131,26 @@ Prefix arguments:
       (format "%s%s" (downcase first-letter) rest-of-letters))))
 
 (defun insert-or-replace-word (word)
-  (move-beginning-of-line 1)
-  (let ((defs '("class" "object" "trait" "val" "def")))
-    (when (member word defs)
-      (cond ((member (word-at-point) defs)
-	     (progn
-	       (delete-region (beginning-of-thing 'word) (+ 1 (end-of-thing 'word)))
-	       (insert (format "%s " word))
-	       (move-end-of-line 1)))
-	    (t
-	     (progn
-	       (insert (format "%s " word))
-	       (move-end-of-line 1)))))))
+  (let ((search-for (string-match "\\[.*] Ag search for (default \\(.*)\\): " (minibuffer-prompt)))
+        (result (match-string-no-properties 1)))
+    (when (string= "" (minibuffer-contents-no-properties))
+          (insert (format "%s" result)))
+    (move-beginning-of-line 1)
+    (let ((defs '("class" "object" "trait" "val" "def" "type")))
+      (when (member word defs)
+        (cond ((member (word-at-point) defs)
+               (progn
+                 (delete-region (beginning-of-thing 'word) (+ 1 (end-of-thing 'word)))
+                 (insert (format "%s " word))
+                 (move-end-of-line 1)))
+              (t
+               (progn
+                 (insert (format "%s" word))
+                 (move-end-of-line 1))))))))
 
 (defun delete-word ()
   (move-beginning-of-line 1)
-  (let ((defs '("class" "object" "trait" "val" "def")))
+  (let ((defs '("class" "object" "trait" "val" "def" "type")))
     (cond ((member (word-at-point) defs)
 	   (progn (delete-region (beginning-of-thing 'word) (+ 1 (end-of-thing 'word)))
 		  (move-end-of-line 1)))))
@@ -150,31 +158,42 @@ Prefix arguments:
 
 (defhydra scala-minibuffer-search ()
   "
-Search for _c_ class _t_ trait _o_ object _v_ val _d_ def _q_ quit"
+Search for _c_ class _t_ trait _o_ object _v_ val _d_ def _y_ type _q_ quit"
     ("c" (insert-or-replace-word "class") nil)
     ("t" (insert-or-replace-word "trait") nil)
     ("o" (insert-or-replace-word "object") nil)
     ("d" (insert-or-replace-word "def") nil)
     ("v" (insert-or-replace-word "val") nil)
+    ("y" (insert-or-replace-word "type") nil)
     ("q" (delete-word) nil :color blue))
 
 (defun mini-hook ()
   (if (and
        (functionp 'sbt:find-root)
        (sbt:find-root)
-       (string-match "Ag search for:" (minibuffer-prompt)))
+       (string-match "\\[.*] Ag search for (default .*): " (minibuffer-prompt)))
       (scala-minibuffer-search/body)))
 
 (add-hook 'minibuffer-setup-hook 'mini-hook)
 
 (defhydra run-mongo ()
   "
-Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _q_ quit"
+Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _t_ shell _q_ quit"
   ("r" (mongo "reset") nil)
   ("s" (mongo "start") nil)
   ("n" (mongo "start-no-auth") nil)
   ("e" (send-eof) nil)
+  ("t" (switch-to-shell) nil)
   ("q" nil nil :color blue))
+
+(defun switch-to-shell ()
+  "Switch to shell with running mongo db"
+  (let* ((sbt-root (sbt:find-root))
+         (buffer-name (format "*shell* %s" sbt-root))
+         (buffer (get-buffer buffer-name)))
+    (if (and sbt-root buffer)
+        (switch-to-buffer-other-window buffer)
+     (message "Not in sbt project."))))
 
 (defmacro with-shell-in-sbt-project (body)
   `(let* ((sbt-root (sbt:find-root))
@@ -185,6 +204,7 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _q_ quit"
          (unless buffer
            (with-current-buffer (shell)
              (rename-buffer buffer-name)
+             (comint-send-string (current-buffer) (concat "cd " sbt-root "\n"))
              (setq buffer (current-buffer))))
          (with-current-buffer buffer
            ,body))
@@ -242,9 +262,25 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _q_ quit"
          (restclient:call-last)
        (restclient:hydra/body)))
     (`(,n . nil) ;; run with C-u
-       (restclient:hydra/body))))
+     (restclient:hydra/body))))
 
-(bind-key "C-c C-s" 'restclient:save-some-buffer-and-make-rest-call)
+(defun restclient:save-single-buffer-and-make-rest-call ()
+  (interactive)
+  (pcase current-prefix-arg
+    (`nil
+     (cond ((string-match "^*sbt*" (buffer-name))
+            (restclient:call-last))
+           ((equal (progn
+                      (setq current-prefix-arg '(4)) ; C-u
+                      (basic-save-buffer)) "(No changes need to be saved)")
+            (restclient:call-last))
+           (t
+            (restclient:hydra/body))))
+    (`(,n . nil) ;; run with C-u
+     (restclient:hydra/body))))
+
+(bind-key "C-c s" 'restclient:save-some-buffer-and-make-rest-call)
+(bind-key "C-c C-s" 'restclient:save-single-buffer-and-make-rest-call)
 
 (defhydra restclient:hydra ()
   "
