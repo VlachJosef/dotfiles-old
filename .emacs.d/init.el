@@ -1258,8 +1258,9 @@ point reaches the beginning or end of the buffer, stop there."
           ))
   :config
   (setq c-basic-offset 4)
-  :bind (("C-c r" . gdscript-hydra-show)
-         ("C-c C-r C-o" . glsl-find-man-page))
+  :bind (:map glsl-mode-map
+              ("C-c r" . gdscript-hydra-show)
+              ("C-c C-r C-o" . glsl-find-man-page))
   :hook (glsl-mode . (lambda ()
                        (setq tab-width 4))))
 
@@ -1270,8 +1271,9 @@ point reaches the beginning or end of the buffer, stop there."
    gdscript-indent-guess-indent-offset nil
    rg-custom-type-aliases '(("gdscript" ."*.gd *.tscn")))
 
-  :bind (("C-c C-r C-a" . gdscript-docs-browse-api)
-         ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point))
+  :bind (:map gdscript-mode-map
+              ("C-c C-r C-a" . gdscript-docs-browse-api)
+              ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point))
 
   :hook ((gdscript-mode . smartparens-mode)
          (gdscript-mode . subword-mode)
