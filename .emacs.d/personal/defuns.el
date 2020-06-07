@@ -105,7 +105,8 @@ Prefix arguments:
 
 (define-key global-map (kbd "s-i" ) `search-import)
 
-(define-key global-map (kbd "C-x 4 s" ) `sbt-switch-to-active-sbt-buffer)
+;;(define-key global-map (kbd "C-x 4 s" ) `sbt-switch-to-active-sbt-buffer)
+(define-key global-map (kbd "C-x 4 s" ) `sbt-or-sgm:sbt-or-ghci)
 
 ;; Taken from
 ;; https://www.emacswiki.org/emacs/KeyboardMacrosTricks
@@ -136,7 +137,7 @@ Prefix arguments:
     (when (string= "" (minibuffer-contents-no-properties))
           (insert (format "%s" result)))
     (move-beginning-of-line 1)
-    (let ((defs '("class" "object" "trait" "val" "def" "type")))
+    (let ((defs '("new" "class" "object" "trait" "val" "def" "type")))
       (when (member word defs)
         (cond ((member (word-at-point) defs)
                (progn
@@ -150,7 +151,7 @@ Prefix arguments:
 
 (defun delete-word ()
   (move-beginning-of-line 1)
-  (let ((defs '("class" "object" "trait" "val" "def" "type")))
+  (let ((defs '("new" "class" "object" "trait" "val" "def" "type")))
     (cond ((member (word-at-point) defs)
 	   (progn (delete-region (beginning-of-thing 'word) (+ 1 (end-of-thing 'word)))
 		  (move-end-of-line 1)))))
@@ -158,7 +159,8 @@ Prefix arguments:
 
 (defhydra scala-minibuffer-search ()
   "
-Search for _c_ class _t_ trait _o_ object _v_ val _d_ def _y_ type _q_ quit"
+Search for _n_ new _c_ class _t_ trait _o_ object _v_ val _d_ def _y_ type _q_ quit"
+    ("n" (insert-or-replace-word "new") nil)
     ("c" (insert-or-replace-word "class") nil)
     ("t" (insert-or-replace-word "trait") nil)
     ("o" (insert-or-replace-word "object") nil)
@@ -204,7 +206,7 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _t_ shell _q_ quit"
          (unless buffer
            (with-current-buffer (shell)
              (rename-buffer buffer-name)
-             (comint-send-string (current-buffer) (concat "cd " sbt-root "\n"))
+             (comint-send-string (current-buffer) (concat "invoked-from-directory " sbt-root "\n"))
              (setq buffer (current-buffer))))
          (with-current-buffer buffer
            ,body))
@@ -279,7 +281,7 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _t_ shell _q_ quit"
     (`(,n . nil) ;; run with C-u
      (restclient:hydra/body))))
 
-(bind-key "C-c s" 'restclient:save-some-buffer-and-make-rest-call)
+;;(bind-key "C-c s" 'restclient:save-some-buffer-and-make-rest-callb)
 (bind-key "C-c C-s" 'restclient:save-single-buffer-and-make-rest-call)
 
 (defhydra restclient:hydra ()
@@ -289,3 +291,127 @@ Rest client: _s_ last _d_ open _r_ reset _q_ quit"
   ("d" (restclient:open-current-rest-calls) nil :color blue)
   ("r" (restclient:reset-open-current-rest-calls) nil)
   ("q" nil nil :color blue))
+
+(defun tut-toggle-between-scala-and-markdown()
+  (interactive)
+
+  (when (equal (buffer-name) "slides.html")
+    (if (equal major-mode 'scala-mode)
+        (progn
+          (widen)
+          (markdown-mode))
+      (save-excursion
+        (search-backward "```tut")
+        (next-line)
+        (let ((start (point)))
+          (search-forward "```")
+          (beginning-of-line)
+          (narrow-to-region start (point))
+          (scala-mode))))))
+
+(define-key global-map (kbd "C-x m" ) `tut-toggle-between-scala-and-markdown)
+
+
+(defun nxml-pretty-format ()
+    (interactive)
+    (save-excursion
+        (shell-command-on-region (point-min) (point-max) "xmllint --format -" (buffer-name) t)
+        (nxml-mode)
+        (indent-region begin end)))
+
+
+(defun defly ()
+  (interactive)
+  (let* ((cmd-and-args (funcall (flymake-get-init-function buffer-file-name)))
+         (cmd          (nth 0 cmd-and-args))
+         (args         (nth 1 cmd-and-args))
+         (dir          (nth 2 cmd-and-args))
+         (process (apply 'start-file-process
+                         "flymake-proc-2" (current-buffer) cmd args)))
+
+    (set-process-sentinel process 'my-flymake-process-sentinel)
+    (set-process-filter process 'my-flymake-process-filter)
+    (message "cmd: %s" cmd)
+    (message "args: %s" args)
+    ;;(message "dir: %s" dir)
+    )
+
+)
+
+(defun my-flymake-process-sentinel (process _event)
+  "Sentinel for syntax check buffers."
+  (message "my-flymake-process-sentinel process: %s" process)
+  (message "my-flymake-process-sentinel _event : %s" _event)
+   (when (memq (process-status process) '(signal exit))
+     (message "HAHAHAHAHAHAHHAHAH")
+     )
+  )
+
+(defun my-flymake-process-filter (process output)
+  (message "my-flymake-process-filter process: %s" process)
+  (message "my-flymake-process-filter output : %s" output)
+  )
+
+(defun no-test-line ()
+  (interactive)
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (flush-lines "^test/" (point-min) (point-max) t)
+      (flush-lines "src/test/" (point-min) (point-max) t))))
+
+(defun pre-process-kill-ring-element (element)
+  (replace-regexp-in-string "^[[:space:]]+" ""
+                            (replace-regexp-in-string "[[:space:]]+$" "" (substring-no-properties element))))
+
+(defun preprocess-kill-ring ()
+  (let ((result nil)
+        (element nil))
+    (dolist (element kill-ring)
+      (progn
+        (setq element (pre-process-kill-ring-element element))
+        (when (not (or
+                    (eq 0 (length element))
+                    (string-match-p "[\r\n]+" element)))
+          (setq result (cons element result)))))
+    (reverse result)))
+
+(defun browse-kill-ring ()
+  (interactive)
+  (insert (ivy-read "Pick an element: "
+                    (preprocess-kill-ring))))
+
+(global-set-key (kbd "C-M-y") 'browse-kill-ring)
+
+(defun haskell-new ()
+  (interactive)
+  (let ((name (read-string "Project name: ")))
+    (if (string-empty-p name) (message "Project name cannot be empty.")
+      (when (y-or-n-p (format "Create project %s in %s?" name default-directory))
+        (with-temp-buffer
+          (shell-command (format "stack new %s https://raw.githubusercontent.com/VlachJosef/simple-ghci-mode/master/simple-ghci.hsfiles" name) t)
+          (let ((default-directory (concat default-directory "/" name)))
+            (shell-command "git init" t)
+            (shell-command "git add ." t)
+            (find-file "src/Lib.hs")
+            (end-of-buffer)))))))
+
+(defun upload-template ()
+  (interactive)
+  (save-excursion
+    (beginning-of-buffer)
+    (insert "# -*- restclient -*-
+
+POST http://localhost:9196/gform/formtemplates
+Content-Type: application/json; charset=utf-8
+Csrf-Token: nocheck
+X-requested-with: foo
+
+")
+    (restclient-mode)
+    (restclient-http-send-current-stay-in-window)
+    (beginning-of-buffer)
+    (kill-whole-line 7)
+    (js-mode)
+    (save-buffer)
+    )
+  )
