@@ -125,7 +125,7 @@
 (add-to-list 'load-path "~/develop-emacs/ag-haskell-hydra/")
 (add-to-list 'load-path "~/develop-emacs/simple-ghci-mode/")
 ;;(add-to-list 'load-path "~/develop-nix/nix-mode/")
-;;(add-to-list 'load-path "~/.emacs.d/so-long/")
+(add-to-list 'load-path "~/.emacs.d/so-long/") ;; https://raw.githubusercontent.com/emacs-mirror/emacs/master/lisp/so-long.el
 ;;(add-to-list 'load-path "~/.emacs.d/gited/")
 ;;(add-to-list 'load-path "~/.emacs.d/ghcid/")
 (add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode/")
@@ -136,10 +136,8 @@
 ;;(require 'gited)
 ;;(define-key dired-mode-map "\C-x\C-g" 'gited-list-branches)
 
-(when (require 'so-long nil :noerror)
-  (so-long-enable)
-  (setq so-long-threshold 1000))
-
+(use-package so-long
+  :config (global-so-long-mode 1))
 
 ;;-(require 'smex)
 ;;-(smex-initialize)
@@ -1261,8 +1259,10 @@ point reaches the beginning or end of the buffer, stop there."
   :bind (:map glsl-mode-map
               ("C-c r" . gdscript-hydra-show)
               ("C-c C-r C-o" . glsl-find-man-page))
-  :hook (glsl-mode . (lambda ()
-                       (setq tab-width 4))))
+  :hook ((glsl-mode . (lambda ()
+                        (setq tab-width 4)))
+         (glsl-mode . smartparens-mode))
+  )
 
 (use-package gdscript-mode
   :config
