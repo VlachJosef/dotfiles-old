@@ -1261,7 +1261,8 @@ point reaches the beginning or end of the buffer, stop there."
               ("C-c C-r C-o" . glsl-find-man-page))
   :hook ((glsl-mode . (lambda ()
                         (setq tab-width 4)))
-         (glsl-mode . smartparens-mode))
+         (glsl-mode . smartparens-mode)
+         (glsl-mode . subword-mode))
   )
 
 (use-package gdscript-mode
