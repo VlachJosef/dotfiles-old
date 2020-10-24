@@ -2,6 +2,7 @@
 (setq debug-on-error nil)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; This section is for global settings for built-in emacs parameters
+(setq lsp-java-jdt-download-url  "https://download.eclipse.org/jdtls/milestones/0.57.0/jdt-language-server-0.57.0-202006172108.tar.gz")
 (setq
  initial-scratch-message nil
  make-backup-files nil
@@ -14,13 +15,13 @@
  compilation-scroll-output nil
  scroll-error-top-bottom t
  kill-do-not-save-duplicates t
- ensime-startup-snapshot-notification nil
  dired-dwim-target t
  dired-listing-switches "-alo"
  reb-auto-match-limit 2000
  switch-to-buffer-preserve-window-point t
- ensime-server-version "2.0.0-M1"
- )
+ frame-resize-pixelwise t
+ split-window-keep-point nil
+ initial-major-mode 'emacs-lisp-mode)
 
 (global-hl-line-mode -1)
 
@@ -59,7 +60,7 @@
 (add-hook 'sbt-mode-hook' (lambda () (add-hook 'before-save-hook 'clear-sbt-compilation-buffer)))
 
 (add-hook 'sbt-mode-hook (lambda ()
-                           (define-key comint-mode-map [remap comint-write-output] 'restclient:save-single-buffer-and-make-rest-call)
+                           (define-key comint-mode-map [remap comint-write-output] 'resend-last)
                            (add-hook 'before-save-hook 'sbt-hydra:check-modified-buffers)
 			   ))
 
@@ -108,13 +109,13 @@
 (require 'package)
 
 ;;;;(add-to-list 'package-archives
-(add-to-list 'package-archives '("melpa" . "http://melpa.milkbox.net/packages/") t)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
 ;;;;(add-to-list 'package-archives
 ;;;;         '("SC" . "http://joseito.republika.pl/sunrise-commander/") t)
 (package-initialize)
 
 ;; this needs to be after package-initialize to overwrite default melpa packages
-;;(add-to-list 'load-path "~/develop-ensime/ensime-emacs/")
 (add-to-list 'load-path "~/develop-emacs/emacswiki")
 ;;(add-to-list 'load-path "~/develop-emacs/hs-lint")
 ;;(add-to-list 'load-path "~/develop-purescript/purescript-mode/")
@@ -125,16 +126,26 @@
 (add-to-list 'load-path "~/develop-emacs/ag-haskell-hydra/")
 (add-to-list 'load-path "~/develop-emacs/simple-ghci-mode/")
 ;;(add-to-list 'load-path "~/develop-nix/nix-mode/")
-(add-to-list 'load-path "~/.emacs.d/so-long/") ;; https://raw.githubusercontent.com/emacs-mirror/emacs/master/lisp/so-long.el
+;;(add-to-list 'load-path "~/.emacs.d/json-mode/") ;; https://github.com/UwUnyaa/json-mode
+(add-to-list 'load-path "~/.emacs.d/emacs-sdcv/") ;; https://github.com/gucong/emacs-sdcv
 ;;(add-to-list 'load-path "~/.emacs.d/gited/")
 ;;(add-to-list 'load-path "~/.emacs.d/ghcid/")
 (add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode/")
+;;(add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode-debugger/")
+(add-to-list 'load-path "~/.emacs.d/ensime-emacs/")
 
 ;;(require 'hs-lint)
 (require 'ag-haskell-hydra)
 (require 'simple-ghci-mode)
+;;(require 'json-mode)
+(require 'sdcv-mode)
+(require 'ensime-editor)
 ;;(require 'gited)
 ;;(define-key dired-mode-map "\C-x\C-g" 'gited-list-branches)
+
+(use-package json-mode
+  :config
+  (local-unset-key [(control meta ?x)]))
 
 (use-package so-long
   :config (global-so-long-mode 1))
@@ -145,12 +156,23 @@
 
 (require 'gdscript-mode)
 
+;;(require 'gdscript-debugger)
+
 (require 'use-package)
 
 (add-hook 'org-mode-hook
           (lambda ()
 	    (smartparens-mode)
             (subword-mode)))
+
+(add-hook 'Info-selection-hook 'info-colors-fontify-node)
+
+(use-package isearch
+  :config
+  (setq
+   isearch-lazy-count t
+   lazy-highlight-cleanup nil
+   isearch-yank-on-move 'shift))
 
 
 (use-package erc
@@ -428,7 +450,8 @@
 (use-package sbt-mode
  :init
  (setq sbt:sbt-prompt-regexp "^\\(\\[[^\]]*\\] \\)?[>$][ ]*"
-       sbt:program-options '("-Djline.terminal=auto"))
+       sbt:program-options '("-Djline.terminal=auto" "-Dsbt.supershell=false")
+       sbt-hydra:allowed-files-regexp '(".*.scala$" ".*/routes$" ".*.scala.html$"))
  ;;:bind (("C-c C-s" . restclient:save-single-buffer-and-make-rest-call))
  )
 ;;
@@ -450,12 +473,13 @@
   (define-key company-active-map [tab] nil)
   (define-key company-active-map (kbd "TAB") nil))
 
-(use-package yasnippet
-  ;;:diminish yas-minor-mode
-  :commands yas-minor-mode
-  :config
-  (yas-reload-all)
-  (define-key yas-minor-mode-map [tab] #'yas-expand))
+;; (use-package yasnippet
+;;   ;;:diminish yas-minor-mode
+;;   :commands yas-minor-mode
+;;   :config
+;;   (yas-reload-all)
+;;   ;; (define-key yas-minor-mode-map [tab] #'yas-expand)
+;;   )
 
 (require 'ido-vertical-mode)
 (ido-mode 1)
@@ -529,7 +553,8 @@
   (bind-key "C-c c" `sbt-command scala-mode-map)
   (bind-key "M-SPC" `scala-indent:fixup-whitespace)
   (bind-key "C-M-j" `scala-indent:join-line)
-  (bind-key "C-c e" `next-error))
+  (bind-key "C-c e" `next-error)
+  (bind-key "TAB" `indent-according-to-mode scala-mode-map))
 
 ;(use-package protobug-mode)
 (add-hook 'protobuf-mode-hook
@@ -588,44 +613,17 @@
 	    (prettify-symbols-mode)
 	    (eldoc-mode)))
 
-;;-;; assuming you put the repository in ~/.emacs.d/ensime
-;;-(add-to-list 'load-path (concat user-emacs-directory "ensime-emacs"))
-
-(defun ensime-edit-definition-with-fallback ()
-  "Variant of `ensime-edit-definition' with ctags if ENSIME is not available."
-  (interactive)
-;;  (message "ENSIME LOOKUP RUNNING %S" (ensime-connection-or-nil))
-  (if (ensime-connection-or-nil)
-      (let ((lookup-definition-result (ensime-edit-definition)))
-        (if (stringp lookup-definition-result) (projectile-find-tag)))
-    (projectile-find-tag)))
+;; (defun ensime-edit-definition-with-fallback ()
+;;   "Variant of `ensime-edit-definition' with ctags if ENSIME is not available."
+;;   (interactive)
+;; ;;  (message "ENSIME LOOKUP RUNNING %S" (ensime-connection-or-nil))
+;;   (if (ensime-connection-or-nil)
+;;       (let ((lookup-definition-result (ensime-edit-definition)))
+;;         (if (stringp lookup-definition-result) (projectile-find-tag)))
+;;     (projectile-find-tag)))
 
 (use-package diminish
   :ensure t)
-
-(use-package ensime
-  :commands ensime ensime-mode
-  :demand
-  :diminish ensime-mode
-  :init
-  (put 'ensime-auto-generate-config 'safe-local-variable #'booleanp)
-  (setq
-   ensime-default-buffer-prefix "ENSIME-" ;; default value was inferior-ensime-server
-   ;;ensime-prefer-noninteractive t
-   ensime-refactor-enable-beta t
-   ensime-refactor-preview t
-   ensime-refactor-preview-override-hunk 10
-   ensime-startup-notification nil
-   ensime-search-interface 'classic
-   sbt:default-command "projects"
-   ;;sbt:prompt-regexp "^\\[.*\\]>[ ]*"
-   )
-  :config
-
-  ;;(bind-key "s-n" 'ensime-search ensime-mode-map)
-  (bind-key "s-t" 'ensime-print-type-at-point ensime-mode-map)
-  ;;(bind-key "M-." 'ensime-edit-definition-with-fallback ensime-mode-map)
-  )
 
 ;; (defun right-arrow ()
 ;;   (interactive)
@@ -645,7 +643,6 @@
 (add-hook 'scala-mode-hook
 	  (lambda()
 	    (message "Running scala-mode-hook")
-	    (ensime-mode)
 	    (setq comment-start "/* "
 		  comment-end " */"
 		  comment-style 'multi-line
@@ -653,29 +650,30 @@
 	    ;;(electric-pair-mode)
             (rainbow-delimiters-mode)
 	    (electric-indent-mode)
-	    (yas-minor-mode t)
+	    ;;(yas-minor-mode t)
 	    (company-mode t)
 	    (smartparens-mode) ;; smartparens must be below electric-*-modes
 	    (show-paren-mode)
 	    (subword-mode)
 	    (glasses-mode)
-	    (define-key yas-minor-mode-map [tab] #'yas-expand)
+	    ;;(define-key yas-minor-mode-map [tab] #'yas-expand)
             ;;(local-set-key (kbd "-") 'left-arrow)
 	    ;;(git-gutter-mode)
 	    ))
 
-(add-hook 'java-mode-hook (lambda()
-	    (message "Running java-mode-hook")
-	    (ensime-mode)
-	    (electric-indent-mode)
-	    (yas-minor-mode t)
-	    (company-mode t)
-	    (smartparens-mode) ;; smartparens must be below electric-*-modes
-	    (show-paren-mode)
-	    (subword-mode)
-	    (glasses-mode)
-	    (define-key yas-minor-mode-map [tab] #'yas-expand)
-	    ))
+(add-hook 'java-mode-hook #'lsp)
+;; (add-hook 'java-mode-hook (lambda()
+;; 	    (message "Running java-mode-hook")
+;; 	    (electric-indent-mode)
+;; 	    (yas-minor-mode t)
+;; 	    (company-mode t)
+;; 	    (smartparens-mode) ;; smartparens must be below electric-*-modes
+;; 	    (show-paren-mode)
+;; 	    (subword-mode)
+;; 	    (glasses-mode)
+;; 	    (define-key yas-minor-mode-map [tab] #'yas-expand)
+
+;; 	    ))
 
 (add-hook 'apib-mode-hook
 	  (lambda()
@@ -697,9 +695,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(default ((t (:height 140 :family "Menlo"))))
- '(font-lock-comment-face ((t (:foreground "yellow green"))))
- '(magit-diff-added-highlight ((t (:background "#2F4F2F"))))
+ '(highlight ((t (:background "dark cyan"))))
  '(vc-conflict-state ((t (:foreground "Red"))))
  '(vc-edited-state ((t (:background "#555511" :foreground "#E0CF9F"))))
  '(vc-locally-added-state ((t (:foreground "hot pink"))))
@@ -720,6 +716,8 @@
 ;;-(add-to-list 'load-path "~/.emacs.d/elpa/ace-jump-mode-20140616.115/")
 ;;-(require 'ace-jump-mode)
 ;;(define-key global-map (kbd "C-c C-SPC" ) 'ace-jump-mode)
+
+(add-to-list 'load-path (concat user-emacs-directory "ensime-emacs"))
 
 (require 'ace-jump-zap)
 (define-key global-map (kbd "C-z" ) `ace-jump-zap-up-to-char)
@@ -828,11 +826,18 @@
               ("C-c e" . sgm:next-error)
               ("s-F" . ahh:projectile-ag-regexp)))
 
-(use-package js-mode
+(use-package json-mode
   :config
-  :bind (:map js-mode-map
+  :bind (:map json-mode-map
               ("C-c C-c" . upload-template)
-              ))
+              ("C-c C-o" . open-template-in-browser)))
+
+(add-hook 'json-mode-hook (lambda ()
+                               (subword-mode)
+                               (glasses-mode)
+                               (smartparens-mode)
+                               (company-mode)
+                               (rainbow-delimiters-mode)))
 
 
 ;; (use-package hs-lint
@@ -1136,7 +1141,10 @@ point reaches the beginning or end of the buffer, stop there."
         (delete-dups ad-return-value)
         (reverse ad-return-value))))
 
+(set-face-attribute 'default nil :height 135)
 (set-face-attribute 'region nil :background "DeepPink4")
+(set-face-attribute 'region nil :background "DeepPink4")
+
 
 ;; (use-package 0blayout
 ;;   :ensure t
@@ -1166,7 +1174,7 @@ point reaches the beginning or end of the buffer, stop there."
 ;;- '(magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
 ;;- '(package-selected-packages
 ;;-   (quote
-;;-    (ensime zygospore zenburn-theme yasnippet which-key visual-regexp use-package sunrise-commander smex smartparens session rainbow-delimiters protobuf-mode projectile popup org-present nyan-mode move-dup magit lua-mode key-chord json-mode ido-vertical-mode highlight-symbol highlight-indentation haskell-mode groovy-mode golden-ratio git-gutter git-gutter+ general-close expand-region exec-path-from-shell discover-my-major crux counsel company color-theme-sanityinc-tomorrow color-theme-sanityinc-solarized beacon avy anzu ag ace-jump-zap)))
+;;-    (zygospore zenburn-theme which-key visual-regexp use-package sunrise-commander smex smartparens session rainbow-delimiters protobuf-mode projectile popup org-present nyan-mode move-dup magit lua-mode key-chord json-mode ido-vertical-mode highlight-symbol highlight-indentation haskell-mode groovy-mode golden-ratio git-gutter git-gutter+ general-close expand-region exec-path-from-shell discover-my-major crux counsel company color-theme-sanityinc-tomorrow color-theme-sanityinc-solarized beacon avy anzu ag ace-jump-zap)))
 ;;- '(sbt:default-command "~compile")
 ;;- '(vc-annotate-background nil)
 ;;- '(vc-annotate-color-map
@@ -1197,24 +1205,53 @@ point reaches the beginning or end of the buffer, stop there."
  ;; If there is more than one, they won't work right.
  '(bmkp-last-as-first-bookmark-file "~/.emacs.d/bookmarks")
  '(company-ghc-show-info t)
- '(company-quickhelp-color-background "#4F4F4F")
  '(company-quickhelp-use-propertized-text nil)
- '(ensime-sbt-perform-on-save "compile")
  '(erc-modules
-   (quote
-    (autojoin button completion fill irccontrols list match menu move-to-prompt netsplit networks noncommands readonly ring services stamp track)))
+   '(autojoin button completion fill irccontrols list match menu move-to-prompt netsplit networks noncommands readonly ring services stamp track))
+ '(ibuffer-saved-filter-groups nil)
+ '(ibuffer-saved-filters
+   '(("programming"
+      (or
+       (derived-mode . prog-mode)
+       (mode . ess-mode)
+       (mode . compilation-mode)))
+     ("text document"
+      (and
+       (derived-mode . text-mode)
+       (not
+        (starred-name))))
+     ("TeX"
+      (or
+       (derived-mode . tex-mode)
+       (mode . latex-mode)
+       (mode . context-mode)
+       (mode . ams-tex-mode)
+       (mode . bibtex-mode)))
+     ("web"
+      (or
+       (derived-mode . sgml-mode)
+       (derived-mode . css-mode)
+       (mode . javascript-mode)
+       (mode . js2-mode)
+       (mode . scss-mode)
+       (derived-mode . haml-mode)
+       (mode . sass-mode)))
+     ("gnus"
+      (or
+       (mode . message-mode)
+       (mode . mail-mode)
+       (mode . gnus-group-mode)
+       (mode . gnus-summary-mode)
+       (mode . gnus-article-mode)))))
  '(magit-commit-arguments nil)
  '(magit-log-arguments
-   (quote
-    ("--graph" "--color" "--decorate" "--show-signature" "-n256")))
+   '("--graph" "--color" "--decorate" "--show-signature" "-n256"))
  '(package-selected-packages
-   (quote
-    (glsl-mode rg lsp-mode prettier-js kotlin-mode ansi nix-mode feature-mode diminish color-identifiers-mode overseer bookmark+ bookmarks+ intero dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander f dash s iedit psci psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options nixos-options nix-sandbox revive expand-region remark-mode zygospore zenburn-theme yaml-mode which-key web-mode visual-regexp use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress noccur markdown-mode magit-gh-pulls key-chord js2-mode ivy inf-mongo ido-vertical-mode hindent highlight-symbol groovy-mode grizzl git-timemachine furl flycheck ensime csv-mode crux company-ghc cider cask beacon avy auto-compile anzu ag ace-jump-zap)))
+   '(transpose-frame json-mode info-colors whole-line-or-region lsp-ui lsp-java dap-mode typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress markdown-mode key-chord js2-mode ivy inf-mongo ido-vertical-mode hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cider cask beacon avy anzu ag ace-jump-zap))
  '(safe-local-variable-values
-   (quote
-    ((haskell-stylish-on-save)
+   '((haskell-stylish-on-save)
      (intero-targets "simple-hpack:test:simple-hpack-test")
-     (haskell-process-args-stack-ghci "--ghci-options=-ferror-spans" "--no-build" "--no-load")))))
+     (haskell-process-args-stack-ghci "--ghci-options=-ferror-spans" "--no-build" "--no-load"))))
 (put 'narrow-to-region 'disabled nil)
 (put 'narrow-to-page 'disabled nil)
 
@@ -1268,9 +1305,15 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package gdscript-mode
   :config
   (setq
+   gdscript-docs-force-online-lookup t
    gdscript-godot-executable "/Applications/Godot.app/Contents/MacOS/Godot"
+   ;;gdscript-godot-executable "/Users/pepa/develop-godot/godot/bin/godot.osx.tools.64"
    gdscript-indent-guess-indent-offset nil
+   gdscript-gdformat-line-length 120
+   gdscript-gdformat-save-and-format t
+   gdscript-debug-emacs-executable "Emacs-27.1"
    rg-custom-type-aliases '(("gdscript" ."*.gd *.tscn")))
+
 
   :bind (:map gdscript-mode-map
               ("C-c C-r C-a" . gdscript-docs-browse-api)
@@ -1284,12 +1327,60 @@ point reaches the beginning or end of the buffer, stop there."
          ;;                       (setq multi-isearch-next-buffer-function nil)))
          ))
 
-(defun save-buffer-before-hydra ()
-  (unless (derived-mode-p 'godot-mode)
-    (save-buffer)))
+;; (defun save-buffer-before-hydra ()
+;;   (unless (derived-mode-p 'godot-mode)
+;;     (save-buffer)))
 
-(advice-add 'gdscript-hydra-show :before #'save-buffer-before-hydra)
+;;(advice-add 'gdscript-hydra-show :before #'save-buffer-before-hydra)
 
 (use-package eww
   :config
   (setq shr-use-fonts nil))
+
+(use-package conf-mode
+  :bind (:map conf-mode-map
+              ("C-c r" . gdscript-hydra-show)))
+
+(use-package c++-mode
+  :config
+  (setq c-basic-offset 8)
+  :hook ((c++-mode . smartparens-mode)
+         (c++-mode . subword-mode)))
+
+(use-package hexl
+  :custom-face
+  (highlight ((t (:background "dark cyan")))) ;; this is global change. To make it local: https://emacs.stackexchange.com/questions/2957/how-to-customize-syntax-highlight-for-just-a-given-mode
+  )
+
+(use-package restclient-mode
+  :hook ((restclient-mode . smartparens-mode)
+         (restclient-mode . subword-mode))
+  :bind (("C-c C-o" . open-template-in-browser)))
+
+(use-package lsp-mode :hook ((lsp-mode . lsp-enable-which-key-integration))
+  :config (setq lsp-completion-enable-additional-text-edit nil))
+(use-package lsp-ui)
+(use-package lsp-java :config (add-hook 'java-mode-hook 'lsp))
+(use-package dap-mode :after lsp-mode :config (dap-auto-configure-mode))
+(use-package dap-java :ensure nil)
+(use-package ibuffer
+  :config
+  :bind (("M-o" . other-window)
+         :map global-map ("C-x C-b" . ibuffer)))
+
+(use-package transpose-frame
+  :config
+  :bind (:map ctl-x-4-map ("t" . transpose-frame)))
+
+;; From use-package.info,  Node: bind bind*,
+;; ...
+;; use ‘M-x describe-personal-keybindings’ to see all such
+;; keybindings you’ve set throughout your ‘.emacs’ file
+;; ...
+
+
+(use-package org
+  :config
+  (setq
+   org-special-ctrl-a/e t
+   org-M-RET-may-split-line nil))

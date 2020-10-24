@@ -20,32 +20,32 @@
 		   finally return file-buffers))))))
 
 ;;https://www.emacswiki.org/emacs/ToggleWindowSplit
-(defun toggle-window-split ()
-  (interactive)
-  (if (= (count-windows) 2)
-      (let* ((this-win-buffer (window-buffer))
-	     (next-win-buffer (window-buffer (next-window)))
-	     (this-win-edges (window-edges (selected-window)))
-	     (next-win-edges (window-edges (next-window)))
-	     (this-win-2nd (not (and (<= (car this-win-edges)
-					 (car next-win-edges))
-				     (<= (cadr this-win-edges)
-					 (cadr next-win-edges)))))
-	     (splitter
-	      (if (= (car this-win-edges)
-		     (car (window-edges (next-window))))
-		  'split-window-horizontally
-		'split-window-vertically)))
-	(delete-other-windows)
-	(let ((first-win (selected-window)))
-	  (funcall splitter)
-	  (if this-win-2nd (other-window 1))
-	  (set-window-buffer (selected-window) this-win-buffer)
-	  (set-window-buffer (next-window) next-win-buffer)
-	  (select-window first-win)
-	  (if this-win-2nd (other-window 1))))))
-
-(define-key ctl-x-4-map "t" 'toggle-window-split)
+;; (defun toggle-window-split ()
+;;   (interactive)
+;;   (if (= (count-windows) 2)
+;;       (let* ((this-win-buffer (window-buffer))
+;; 	     (next-win-buffer (window-buffer (next-window)))
+;; 	     (this-win-edges (window-edges (selected-window)))
+;; 	     (next-win-edges (window-edges (next-window)))
+;; 	     (this-win-2nd (not (and (<= (car this-win-edges)
+;; 					 (car next-win-edges))
+;; 				     (<= (cadr this-win-edges)
+;; 					 (cadr next-win-edges)))))
+;; 	     (splitter
+;; 	      (if (= (car this-win-edges)
+;; 		     (car (window-edges (next-window))))
+;; 		  'split-window-horizontally
+;; 		'split-window-vertically)))
+;; 	(delete-other-windows)
+;; 	(let ((first-win (selected-window)))
+;; 	  (funcall splitter)
+;; 	  (if this-win-2nd (other-window 1))
+;; 	  (set-window-buffer (selected-window) this-win-buffer)
+;; 	  (set-window-buffer (next-window) next-win-buffer)
+;; 	  (select-window first-win)
+;; 	  (if this-win-2nd (other-window 1))))))
+;;
+;;(define-key ctl-x-4-map "t" 'toggle-window-split)
 
 (defun normalize-import (import)
   (let* ((normalized (s-replace " " "" (s-collapse-whitespace import)))
@@ -282,7 +282,8 @@ Run mongo: _r_ reset _s_ start _n_ start no-auth _e_ eof _t_ shell _q_ quit"
      (restclient:hydra/body))))
 
 ;;(bind-key "C-c s" 'restclient:save-some-buffer-and-make-rest-callb)
-(bind-key "C-c C-s" 'restclient:save-single-buffer-and-make-rest-call)
+;;(bind-key "C-c C-s" 'restclient:save-single-buffer-and-make-rest-call)
+;;(bind-key "C-c C-s" 'resend-last)
 
 (defhydra restclient:hydra ()
   "
@@ -395,23 +396,90 @@ Rest client: _s_ last _d_ open _r_ reset _q_ quit"
             (find-file "src/Lib.hs")
             (end-of-buffer)))))))
 
-(defun upload-template ()
-  (interactive)
-  (save-excursion
-    (beginning-of-buffer)
-    (insert "# -*- restclient -*-
+(defconst gform-environments
+  '("http://localhost:9196/gform/formtemplates"
+    "http://localhost:9396/gform/formtemplates"))
 
-POST http://localhost:9196/gform/formtemplates
+(defvar gform-last-url (car gform-environments))
+
+(defun resend-last (prefix-arg)
+  (interactive "p")
+  (when-let ((buffer (seq-some (lambda (buffer)
+                                 (with-current-buffer buffer
+                                   (when (and (stringp mode-name)
+                                              (or (string= mode-name "JSON")
+                                                  (string= mode-name "REST Client")))
+                                     buffer)))
+                               (buffer-list))))
+
+    (with-current-buffer buffer
+      (pcase mode-name
+        ("JSON"
+         (upload-template prefix-arg))
+        ("REST Client"
+         (set-buffer-multibyte nil)
+         (restclient-http-send-current)
+         (set-buffer-multibyte t)
+         (message "Uploading rest-client buffer %s" (buffer-name buffer)))))))
+
+(defun upload-template (prefix-arg)
+  (interactive "p")
+
+  (when (eq 4 prefix-arg)
+    (let ((url (projectile-completing-read  "Choose environment: " gform-environments)))
+      (setq gform-last-url url)))
+
+  (let ((json (buffer-string)))
+    (with-temp-buffer
+      (insert (format "# -*- restclient -*-
+
+POST %s
 Content-Type: application/json; charset=utf-8
 Csrf-Token: nocheck
 X-requested-with: foo
 
-")
-    (restclient-mode)
-    (restclient-http-send-current-stay-in-window)
-    (beginning-of-buffer)
-    (kill-whole-line 7)
-    (js-mode)
-    (save-buffer)
-    )
-  )
+" gform-last-url))
+      (insert json)
+      (restclient-mode)
+      (set-buffer-multibyte nil)
+      (restclient-http-send-current-stay-in-window))
+    (message "Uploading json-mode buffer %s to %s" (buffer-name (current-buffer)) gform-last-url)))
+
+(defun open-template-in-browser ()
+  (interactive)
+  (let ((find-template-id-regex "\"_id\"[[:space:]]*:[[:space:]]*\"\\([a-zA-Z0-9-]*\\)\""))
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward find-template-id-regex)
+      (browse-url (concat "http://localhost/submissions/new-form/" (match-string 1))))))
+
+(defun gform-hmrc-start ()
+  (interactive)
+  (with-current-buffer (dired-noselect "/Users/pepa/develop-hmrc/gform-frontend")
+    (sbt-hydra)
+    (add-hook 'sbt-hydra:after-create-hook 'gform-hmrc-sbt-run)))
+
+(defun gform-hmrc-sbt-run ()
+  (with-current-buffer (dired-noselect "/Users/pepa/develop-hmrc/gform")
+    (sbt-hydra)
+    (remove-hook 'sbt-hydra:after-create-hook 'gform-hmrc-sbt-run)))
+
+(defun gform-foldright-start ()
+  (interactive)
+  (with-current-buffer (dired-noselect "/Users/pepa/develop-foldright/gform-frontend")
+    (sbt-hydra)
+    (add-hook 'sbt-hydra:after-create-hook 'gform-foldright-sbt-run)))
+
+(defun gform-foldright-sbt-run ()
+  (gform-run-microservice)
+  (with-current-buffer (dired-noselect "/Users/pepa/develop-foldright/gform")
+    (sbt-hydra)
+    (remove-hook 'sbt-hydra:after-create-hook 'gform-foldright-sbt-run)
+    (add-hook 'sbt-hydra:after-create-hook 'gform-foldright-launch)))
+
+(defun gform-foldright-launch ()
+  (gform-run-microservice)
+  (remove-hook 'sbt-hydra:after-create-hook 'gform-foldright-launch))
+
+(defun gform-run-microservice ()
+  (sbt-hydra:run "microservice"))
