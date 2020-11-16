@@ -1,7 +1,9 @@
 ;; init.el --- Emacs configuration -*- lexical-binding: t; -*-
+;; (describe-personal-keybindings)
 (setq debug-on-error nil)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; This section is for global settings for built-in emacs parameters
+(setq-default indent-tabs-mode nil)
 (setq lsp-java-jdt-download-url  "https://download.eclipse.org/jdtls/milestones/0.57.0/jdt-language-server-0.57.0-202006172108.tar.gz")
 (setq
  initial-scratch-message nil
@@ -33,6 +35,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; This section is for setup functions that are built-in to emacs
 (defalias 'yes-or-no-p 'y-or-n-p)
+(save-place-mode 1)
 (tool-bar-mode -1)
 (set-keyboard-coding-system nil)
 (scroll-bar-mode -1)
@@ -54,15 +57,15 @@
 ;;(add-hook 'after-save-hook 'run-last-sbt-command)
 
 ;; (add-hook 'after-save-hook (lambda ()
-;; 			     ;;(message "FROM AFTER SAVE")
-;; 			     (run-last-sbt-command)))
+;;     ;;(message "FROM AFTER SAVE")
+;;     (run-last-sbt-command)))
 
 (add-hook 'sbt-mode-hook' (lambda () (add-hook 'before-save-hook 'clear-sbt-compilation-buffer)))
 
 (add-hook 'sbt-mode-hook (lambda ()
                            (define-key comint-mode-map [remap comint-write-output] 'resend-last)
                            (add-hook 'before-save-hook 'sbt-hydra:check-modified-buffers)
-			   ))
+                           ))
 
 
 ;; (add-hook 'simple-ghci-mode-hook (lambda ()
@@ -80,28 +83,16 @@
 (defun clear-sbt-compilation-buffer ()
   (let ((current-sbt-root (sbt:find-root)))
     (loop for process being the elements of (process-list)
-	  for current-process-buffer = (process-buffer process)
-	  if (and
-	      (bufferp current-process-buffer) ;; process must have associated buffer
-	      (with-current-buffer current-process-buffer
-		(and
-		 (sbt:mode-p)
-		 (process-live-p process)
-		 (string= (sbt:find-root) current-sbt-root))))
-	  do (progn
-	       (sbt:clear current-process-buffer)))))
-
-   ;; (let ((pos (point-min)))
-   ;;   (while (setq pos (next-single-property-change pos 'compilation-message))
-   ;; 	(when (setq msg (get-text-property pos 'compilation-message))
-   ;; 	  (let ((loc (compilation--message->loc msg)))
-   ;; 	    ;;(setf (compilation--loc->col loc) nil)
-   ;; 	    (setf (compilation--loc->line loc) nil)
-   ;; 	    (setf (compilation--loc->file-struct loc) nil)
-   ;; 	    (setf (compilation--loc->marker loc) nil)
-	    ;;(setf (compilation--loc->visited loc) nil)
-
-
+          for current-process-buffer = (process-buffer process)
+          if (and
+              (bufferp current-process-buffer) ;; process must have associated buffer
+              (with-current-buffer current-process-buffer
+                (and
+                 (sbt:mode-p)
+                 (process-live-p process)
+                 (string= (sbt:find-root) current-sbt-root))))
+          do (progn
+               (sbt:clear current-process-buffer)))))
 
 ;;(load-file "~/.emacs.d/compile-.el")
 ;;(load-file "~/.emacs.d/compile+.el")
@@ -162,7 +153,7 @@
 
 (add-hook 'org-mode-hook
           (lambda ()
-	    (smartparens-mode)
+            (smartparens-mode)
             (subword-mode)))
 
 (add-hook 'Info-selection-hook 'info-colors-fontify-node)
@@ -173,7 +164,6 @@
    isearch-lazy-count t
    lazy-highlight-cleanup nil
    isearch-yank-on-move 'shift))
-
 
 (use-package erc
   :ensure t
@@ -211,9 +201,6 @@
 
 (use-package scala-utils)
 (global-set-key (kbd "C-s-:") 'scala-utils:wrap-in-braces)
-
-(use-package println-debugger)
-(global-set-key (kbd "C-x C-k P") 'print-ln)
 
 (defface face-ghci-link
   '((t :foreground "yellow green")) "highligh links in simple-ghci-mode mode") ;; run list-colors-display to view predefined colors
@@ -319,14 +306,9 @@
 
 (require 'bookmark+)
 
-(use-package saveplace
-  :init
-  (setq-default save-place t)
-  (setq save-place-file "~/.emacs.d/saved-places"))
-
-(use-package ido-vertical-mode
-  :config
-  (ido-vertical-mode 1))
+;; (use-package ido-vertical-mode
+;;   :config
+;;   (ido-vertical-mode 1))
 
 (use-package hydra
    :ensure t)
@@ -360,6 +342,24 @@
   :bind (:map ag-mode-map
               ("t" . no-test-line)))
 
+(use-package ivy
+  :ensure t
+  :init
+  (ivy-mode 1)
+  :config
+  (setq ivy-display-style 'fancy)
+  :bind
+  (:map ivy-mode-map
+        ("C-x b" . ivy-switch-buffer-plain))
+  (:map ivy-minibuffer-map
+        ("M-o" . other-window)
+        ("s-F" . scala-minibuffer-search/body)
+        ("M-k" . ivy-dispatching-done)))
+
+(use-package ivy-hydra
+  :ensure t
+  :after (ivy hydra))
+
 (use-package projectile
   :diminish projectile-mode
   :demand
@@ -367,21 +367,20 @@
   :init (setq
          projectile-use-git-grep t
          ;;projectile-completion-system 'ido
-	 projectile-completion-system 'ivy
+         projectile-completion-system 'ivy
          projectile-switch-project-action 'projectile-commander
          ;;projectile-mode-line '(:eval (format " P[%s]" (projectile-project-name)))
          )
-  :ensure    projectile
+  :ensure projectile
   :config
   (projectile-mode)
   (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
   :bind (("s-f" . projectile-find-file)
-	 ("s-F" . projectile-ag)))
+         ("s-F" . look-for-thing-at-point)))
 
 (use-package winner
   :config (winner-mode 1)
-  :bind (
-         ("C-s-p" . winner-undo)   ;; Control + Shift + Cmd + p
+  :bind (("C-s-p" . winner-undo)   ;; Control + Shift + Cmd + p
          ("C-s-n" . winner-redo))) ;; Control + Shift + Cmd + n
 
 (defun find-class ()
@@ -394,9 +393,9 @@
   :diminish highlight-symbol-mode
   :commands highlight-symbol
   :bind (("s-h" . highlight-symbol)
-	 ("s-n" . highlight-symbol-next)
-	 ("s-p" . highlight-symbol-prev)
-	 ("s-r" . highlight-symbol-remove-all)))
+         ("s-n" . highlight-symbol-next)
+         ("s-p" . highlight-symbol-prev)
+         ("s-r" . highlight-symbol-remove-all)))
 
 (use-package zygospore
   :bind ("C-x 1" . zygospore-toggle-delete-other-windows))
@@ -417,6 +416,7 @@
   (setq magit-visit-ref-behavior '(checkout-any focus-on-ref))
   :commands magit-status magit-blame
   :bind (("s-g" . magit-status)
+         ("s-m" . magit-status)
          ("s-b" . magit-blame)))
 
 ;; (use-package magit-gh-pulls
@@ -425,14 +425,14 @@
 
 (add-hook 'js-mode-hook
           (lambda ()
-	    (smartparens-mode)
-	    (show-paren-mode)
+            (smartparens-mode)
+            (show-paren-mode)
             (subword-mode)
-	    (glasses-mode)))
+            (glasses-mode)))
 
 (add-hook 'markdown-mode-hook
           (lambda ()
-	    (smartparens-mode)
+            (smartparens-mode)
             (subword-mode)))
 
 ;;(use-package anzu
@@ -481,9 +481,9 @@
 ;;   ;; (define-key yas-minor-mode-map [tab] #'yas-expand)
 ;;   )
 
-(require 'ido-vertical-mode)
-(ido-mode 1)
-(ido-vertical-mode 1)
+;;(require 'ido-vertical-mode)
+;;(ido-mode 1)
+;;(ido-vertical-mode 1)
 (which-key-mode nil)
 ;; Standard key for next and previous are C-s and C-r no need to replace with C-n and C-p
 ;;(setq ido-vertical-define-keys 'C-n-and-C-p-only)
@@ -528,7 +528,7 @@
 (use-package crux
   :ensure t
   :bind (
-	 ("C-c f" . crux-recentf-find-file)
+         ("C-c f" . crux-recentf-find-file)
          ("M-k" . crux-smart-open-line)
          ("s-k" . crux-kill-whole-line)
          ("M-j" . crux-smart-open-line-above)
@@ -541,31 +541,82 @@
   (newline-and-indent)
   (scala-indent:insert-asterisk-on-multiline-comment))
 
+(define-key global-map (kbd "C-c e" ) 'next-error)
+
+(use-package emacs
+  :init
+  (setq backward-delete-char-untabify-method 'all)
+  :bind ("C-M-j" . join-line))
+
+(use-package emacs-lisp
+  :bind (:map
+         emacs-lisp-mode-map
+         ([remap sp-previous-sexp] . println2)
+         ([remap sp-next-sexp] . println)
+         ("C-M-p" . println2)
+         ("C-M-n" . println)))
+
 (use-package scala-mode
   ;;//:interpreter
   ;;("scala" . scala-mode)
   :init
-  (setq
-   scala-indent:use-javadoc-style t
-   scala-indent:align-parameters t)
-  :config
-  (bind-key "RET" `scala-mode-newline-comments scala-mode-map)
-  (bind-key "C-c c" `sbt-command scala-mode-map)
-  (bind-key "M-SPC" `scala-indent:fixup-whitespace)
-  (bind-key "C-M-j" `scala-indent:join-line)
-  (bind-key "C-c e" `next-error)
-  (bind-key "TAB" `indent-according-to-mode scala-mode-map))
+  (setq scala-indent:use-javadoc-style t
+        scala-indent:align-parameters t)
+  ;;:config
+  ;; (bind-key "RET" `scala-mode-newline-comments scala-mode-map)
+  ;; (bind-key "C-c c" `sbt-command scala-mode-map)
+  ;; (bind-key "M-SPC" `scala-indent:fixup-whitespace)
+  ;; (bind-key "C-M-j" `scala-indent:join-line)
+  ;; (bind-key "C-M-n" `println)
+  ;; (bind-key "C-c e" `next-error)
+  ;; (bind-key "TAB" `indent-according-to-mode scala-mode-map)
+  ;;(bind-key "C-M-n" nil smartparens-mode-map)
+  ;;;(bind-key "C-M-p" nil smartparens-mode-map)
+
+  ;; Any binding occurring before the first use of :map are applied to the global keymap
+  :bind (:map
+         scala-mode-map
+         ([remap sp-previous-sexp] . println2)
+         ([remap sp-next-sexp] . println)
+         ("RET" . scala-mode-newline-comments)
+         ("DEL" . backward-delete-char-untabify)
+         ("M-SPC" . scala-indent:fixup-whitespace)
+         ("C-M-j" . scala-indent:join-line)
+         ("C-M-p" . println2)
+         ("C-M-n" . println)
+         ("TAB" . indent-according-to-mode)))
+
+(add-hook 'scala-mode-hook
+          (lambda ()
+            (message "Running scala-mode-hook")
+            (setq electric-indent-inhibit t ;; don't indent previous line when pressing enter
+                  comment-start "/* "
+                  comment-end " */"
+                  comment-style 'multi-line
+                  comment-empty-lines t)
+            ;;(electric-pair-mode)
+            (rainbow-delimiters-mode)
+            ;;(yas-minor-mode t)
+            (company-mode t)
+            (smartparens-mode) ;; smartparens must be below electric-*-modes
+            (show-paren-mode)
+            (subword-mode)
+            (glasses-mode)
+            (auto-revert-mode)
+            ;;(define-key yas-minor-mode-map [tab] #'yas-expand)
+            ;;(local-set-key (kbd "-") 'left-arrow)
+            ))
 
 ;(use-package protobug-mode)
 (add-hook 'protobuf-mode-hook
-	  (lambda()
-	    (message "Running protobuf-mode-hook")
-	    (smartparens-mode) ;; smartparens must be below electric-*-modes
-	    (show-paren-mode)
-	    (subword-mode)
-	    (glasses-mode)
-	    ;;(git-gutter-mode)
-	    ))
+          (lambda()
+            (message "Running protobuf-mode-hook")
+            (smartparens-mode) ;; smartparens must be below electric-*-modes
+            (show-paren-mode)
+            (subword-mode)
+            (glasses-mode)
+            ;;(git-gutter-mode)
+            ))
 
 (use-package inf-mongo
   :init
@@ -597,6 +648,8 @@
   (sp-pair "{" "}" :wrap "C-{")
   ;;(sp-local-pair '(c-mode java-mode scala-mode) "(" nil :post-handlers '(("||\n[i]" "RET")))
   ;;(sp-local-pair '(c-mode java-mode) "{" nil :post-handlers '(("||\n[i]" "RET")))
+  ;;(bind-key "C-M-n" nil smartparens-mode-map)
+  ;;(bind-key "C-M-p" nil smartparens-mode-map)
   (bind-key "C-<left>" nil smartparens-mode-map)
   (bind-key "C-<right>" nil smartparens-mode-map)
   (bind-key "M-<backspace>" nil smartparens-mode-map)
@@ -606,21 +659,15 @@
 
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
-	    (setq indent-tabs-mode nil)
             (rainbow-delimiters-mode)
-	    (smartparens-mode) ;; smartparens must be below electric-*-modes
-	    (show-paren-mode)
-	    (prettify-symbols-mode)
-	    (eldoc-mode)))
+            (smartparens-mode) ;; smartparens must be below electric-*-modes
+            (show-paren-mode)
+            (prettify-symbols-mode)
+            (eldoc-mode)))
 
-;; (defun ensime-edit-definition-with-fallback ()
-;;   "Variant of `ensime-edit-definition' with ctags if ENSIME is not available."
-;;   (interactive)
-;; ;;  (message "ENSIME LOOKUP RUNNING %S" (ensime-connection-or-nil))
-;;   (if (ensime-connection-or-nil)
-;;       (let ((lookup-definition-result (ensime-edit-definition)))
-;;         (if (stringp lookup-definition-result) (projectile-find-tag)))
-;;     (projectile-find-tag)))
+(use-package println-debugger
+  :config
+  :bind (:map global-map ("C-x C-k P" . print-ln)))
 
 (use-package diminish
   :ensure t)
@@ -628,63 +675,42 @@
 ;; (defun right-arrow ()
 ;;   (interactive)
 ;;   (cond ((looking-back "=")
-;;    (backward-delete-char 1) (insert "⇒"))
-;; 	((looking-back "-")
-;; 	 (backward-delete-char 1) (insert "→"))
-;; 	(t (insert ">"))))
+;;          (backward-delete-char 1) (insert "⇒"))
+;;         ((looking-back "-")
+;;          (backward-delete-char 1) (insert "→"))
+;;        (t (insert ">"))))
 
 ;; (defun left-arrow ()
 ;;   (interactive)
 ;;   (if (looking-back "-")
 ;;       (progn (backward-delete-char 1)
-;; 	     (insert "//"))
-;;     (insert "-")))
+;;              "//"))
+;;   (insert "-"))
 
-(add-hook 'scala-mode-hook
-	  (lambda()
-	    (message "Running scala-mode-hook")
-	    (setq comment-start "/* "
-		  comment-end " */"
-		  comment-style 'multi-line
-		  comment-empty-lines t)
-	    ;;(electric-pair-mode)
-            (rainbow-delimiters-mode)
-	    (electric-indent-mode)
-	    ;;(yas-minor-mode t)
-	    (company-mode t)
-	    (smartparens-mode) ;; smartparens must be below electric-*-modes
-	    (show-paren-mode)
-	    (subword-mode)
-	    (glasses-mode)
-	    ;;(define-key yas-minor-mode-map [tab] #'yas-expand)
-            ;;(local-set-key (kbd "-") 'left-arrow)
-	    ;;(git-gutter-mode)
-	    ))
+
+;;(electric-indent-mode -1)
 
 (add-hook 'java-mode-hook #'lsp)
 ;; (add-hook 'java-mode-hook (lambda()
-;; 	    (message "Running java-mode-hook")
-;; 	    (electric-indent-mode)
-;; 	    (yas-minor-mode t)
-;; 	    (company-mode t)
-;; 	    (smartparens-mode) ;; smartparens must be below electric-*-modes
-;; 	    (show-paren-mode)
-;; 	    (subword-mode)
-;; 	    (glasses-mode)
-;; 	    (define-key yas-minor-mode-map [tab] #'yas-expand)
+;;                             (message "Running java-mode-hook")
+;;                             (electric-indent-mode)
+;;                             (yas-minor-mode t)
+;;                             (company-mode t)
+;;                             (smartparens-mode) ;; smartparens must be below electric-*-modes
+;;                             (show-paren-mode)
+;;                             (subword-mode)
+;;                             (glasses-mode)
+;;                             (define-key yas-minor-mode-map [tab] #'yas-expand)
 
-;; 	    ))
+;;                             ))
 
 (add-hook 'apib-mode-hook
-	  (lambda()
-	    (message "Running apib-mode-hook")
-	    (setq indent-tabs-mode nil)
-	    (electric-indent-mode)
-	    (smartparens-mode) ;; smartparens must be below electric-*-modes
-	    (show-paren-mode)
-	    (subword-mode)
-	    (glasses-mode)
-	    ))
+          (lambda()
+            (message "Running apib-mode-hook")
+            (smartparens-mode) ;; smartparens must be below electric-*-modes
+            (show-paren-mode)
+            (subword-mode)
+            (glasses-mode)))
 
 ;; == Useful commands ==
 ;; (list-faces-display)
@@ -723,28 +749,30 @@
 (define-key global-map (kbd "C-z" ) `ace-jump-zap-up-to-char)
 
 ;; set up ido mode
-(require `ido)
-(setq ido-enable-flex-matching t)
-(setq ido-everywhere t)
-(ido-mode 1)
+;;(require `ido)
+;;(setq ido-enable-flex-matching t)
+;;(setq ido-everywhere t)
+;;(ido-mode 1)
 
-(defun bind-ido-keys ()
-  "Keybindings for ido mode."
-  (define-key ido-completion-map "\C-p" 'ido-prev-match)
-  (define-key ido-completion-map "\C-n" 'ido-next-match))
+;; (defun bind-ido-keys ()
+;;   "Keybindings for ido mode."
+;;   (define-key ido-completion-map "\C-p" 'ido-prev-match)
+;;   (define-key ido-completion-map "\C-n" 'ido-next-match))
 
-(add-hook 'ido-setup-hook #'bind-ido-keys)
+;; (add-hook 'ido-setup-hook #'bind-ido-keys)
 
 ;;(global-unset-key (kbd "C-z"))
 
+(global-set-key (kbd "ESC ESC") 'keyboard-escape-quit) ;; Rebind from ESC ESC ESC
 (global-set-key (kbd "s-s") `replace-string)
 ;;(global-set-key (kbd "s-s") `vr/replace)
-(global-set-key (kbd "M-x") `smex)
-(global-set-key (kbd "M-z") `smex)
-(global-set-key (kbd "C-c b") `ido-switch-buffer)                     ;; Broken x fix
+(global-set-key (kbd "M-x") `counsel-M-x)
+(global-set-key (kbd "M-z") `look-for-thing-at-point)
+;;(global-set-key (kbd "C-c b") `ido-switch-buffer)                   ;; Broken x fix
+(global-set-key (kbd "C-c b") `counsel-switch-buffer)
 (global-set-key (kbd "C-c s") `save-some-buffers)                     ;; Broken x fix
 (global-set-key (kbd "C-c C-s") `save-buffer)                         ;; Broken x fix
-(global-set-key (kbd "C-c k") `ido-kill-buffer)                       ;; Broken x fix
+;;(global-set-key (kbd "C-c k") `ido-kill-buffer)                       ;; Broken x fix
 (global-set-key (kbd "C-c 1") `zygospore-toggle-delete-other-windows) ;; Broken x fix
 (global-set-key (kbd "M-X") `smex-major-mode-commands)
 ;; This is your old M-x.
@@ -781,7 +809,7 @@
 ;;   :ensure t
 ;;   :config
 ;;   (add-to-list 'company-backends
-;; 	       '(company-ghc :with company-dabbrev-code))
+;;                '(company-ghc :with company-dabbrev-code))
 ;;   (custom-set-variables '(company-ghc-show-info t)))
 
 ;; (add-to-list 'company-backends 'company-ghc)
@@ -878,12 +906,12 @@
 
 
 
-(use-package web-mode
-  :config
-  (setq indent-tabs-mode nil))
+(use-package web-mode)
+
 (add-to-list 'auto-mode-alist '("\\.scala.html\\'" . web-mode))
 
 (add-hook 'web-mode-hook (lambda ()
+                           (setq electric-indent-inhibit t)
                            (subword-mode)
                            (glasses-mode)
                            (smartparens-mode)
@@ -1111,35 +1139,35 @@ point reaches the beginning or end of the buffer, stop there."
 ;;;;
 
 ;;; Filters ido-matches setting acronynm matches in front of the results
-(defadvice ido-set-matches-1 (after ido-smex-acronym-matches activate)
-  (if (and (fboundp 'smex-already-running) (smex-already-running)
-           (> (length ido-text) 1))
-      (let ((regex (concat "^" (mapconcat 'char-to-string ido-text "[^-]*-")))
-            (acronym-matches (list))
-            (remove-regexes '("-menu-")))
-        ;; Creating the list of the results to be set as first
-        (dolist (item items)
-          (if (string-match ido-text item) ;; exact match
-              (add-to-list 'acronym-matches item)
-            (if (string-match (concat regex "[^-]*$") item) ;; strict match
-                (add-to-list 'acronym-matches item)
-              (if (string-match regex item) ;; appending relaxed match
-                  (add-to-list 'acronym-matches item t)))))
-
-        ;; Filtering ad-return-value
-        (dolist (to_remove remove-regexes)
-          (setq ad-return-value
-                (delete-if (lambda (item)
-                             (string-match to_remove item))
-                           ad-return-value)))
-
-        ;; Creating resulting list
-        (setq ad-return-value
-              (append acronym-matches
-                      ad-return-value))
-
-        (delete-dups ad-return-value)
-        (reverse ad-return-value))))
+;; (defadvice ido-set-matches-1 (after ido-smex-acronym-matches activate)
+;;   (if (and (fboundp 'smex-already-running) (smex-already-running)
+;;            (> (length ido-text) 1))
+;;       (let ((regex (concat "^" (mapconcat 'char-to-string ido-text "[^-]*-")))
+;;             (acronym-matches (list))
+;;             (remove-regexes '("-menu-")))
+;;         ;; Creating the list of the results to be set as first
+;;         (dolist (item items)
+;;           (if (string-match ido-text item) ;; exact match
+;;               (add-to-list 'acronym-matches item)
+;;             (if (string-match (concat regex "[^-]*$") item) ;; strict match
+;;                 (add-to-list 'acronym-matches item)
+;;               (if (string-match regex item) ;; appending relaxed match
+;;                   (add-to-list 'acronym-matches item t)))))
+;;
+;;         ;; Filtering ad-return-value
+;;         (dolist (to_remove remove-regexes)
+;;           (setq ad-return-value
+;;                 (delete-if (lambda (item)
+;;                              (string-match to_remove item))
+;;                            ad-return-value)))
+;;
+;;         ;; Creating resulting list
+;;         (setq ad-return-value
+;;               (append acronym-matches
+;;                       ad-return-value))
+;;
+;;         (delete-dups ad-return-value)
+;;         (reverse ad-return-value))))
 
 (set-face-attribute 'default nil :height 135)
 (set-face-attribute 'region nil :background "DeepPink4")
@@ -1155,103 +1183,6 @@ point reaches the beginning or end of the buffer, stop there."
 ;;   ;; Load the mode
 ;;   :config (0blayout-mode t))
 
-;;-(custom-set-variables
-;;- ;; custom-set-variables was added by Custom.
-;;- ;; If you edit it by hand, you could mess it up, so be careful.
-;;- ;; Your init file should contain only one such instance.
-;;- ;; If there is more than one, they won't work right.
-;;- '(ansi-color-faces-vector
-;;-   [default default default italic underline success warning error])
-;;- '(ansi-color-names-vector
-;;-   ["#212526" "#ff4b4b" "#b4fa70" "#fce94f" "#729fcf" "#e090d7" "#8cc4ff" "#eeeeec"])
-;;- '(beacon-color 0.4)
-;;- '(cursor-type (quote box))
-;;- '(custom-safe-themes
-;;-   (quote
-;;-    ("f024aea709fb96583cf4ced924139ac60ddca48d25c23a9d1cd657a2cf1e4728" "4aee8551b53a43a883cb0b7f3255d6859d766b6c5e14bcb01bed572fcbef4328" "4cf3221feff536e2b3385209e9b9dc4c2e0818a69a1cdb4b522756bcdf4e00a4" "628278136f88aa1a151bb2d6c8a86bf2b7631fbea5f0f76cba2a0079cd910f7d" "06f0b439b62164c6f8f84fdda32b62fb50b6d00e8b01c2208e55543a6337433a" "bb08c73af94ee74453c90422485b29e5643b73b05e8de029a6909af6a3fb3f58" "1b8d67b43ff1723960eb5e0cba512a2c7a2ad544ddb2533a90101fd1852b426e" "82d2cac368ccdec2fcc7573f24c3f79654b78bf133096f9b40c20d97ec1d8016" default)))
-;;- '(delete-selection-mode t)
-;;- '(fci-rule-color "#d6d6d6")
-;;- '(magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
-;;- '(package-selected-packages
-;;-   (quote
-;;-    (zygospore zenburn-theme which-key visual-regexp use-package sunrise-commander smex smartparens session rainbow-delimiters protobuf-mode projectile popup org-present nyan-mode move-dup magit lua-mode key-chord json-mode ido-vertical-mode highlight-symbol highlight-indentation haskell-mode groovy-mode golden-ratio git-gutter git-gutter+ general-close expand-region exec-path-from-shell discover-my-major crux counsel company color-theme-sanityinc-tomorrow color-theme-sanityinc-solarized beacon avy anzu ag ace-jump-zap)))
-;;- '(sbt:default-command "~compile")
-;;- '(vc-annotate-background nil)
-;;- '(vc-annotate-color-map
-;;-   (quote
-;;-    ((20 . "#c82829")
-;;-     (40 . "#f5871f")
-;;-     (60 . "#eab700")
-;;-     (80 . "#718c00")
-;;-     (100 . "#3e999f")
-;;-     (120 . "#4271ae")
-;;-     (140 . "#8959a8")
-;;-     (160 . "#c82829")
-;;-     (180 . "#f5871f")
-;;-     (200 . "#eab700")
-;;-     (220 . "#718c00")
-;;-     (240 . "#3e999f")
-;;-     (260 . "#4271ae")
-;;-     (280 . "#8959a8")
-;;-     (300 . "#c82829")
-;;-     (320 . "#f5871f")
-;;-     (340 . "#eab700")
-;;-     (360 . "#718c00"))))
-;;- '(vc-annotate-very-old-color nil))
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(bmkp-last-as-first-bookmark-file "~/.emacs.d/bookmarks")
- '(company-ghc-show-info t)
- '(company-quickhelp-use-propertized-text nil)
- '(erc-modules
-   '(autojoin button completion fill irccontrols list match menu move-to-prompt netsplit networks noncommands readonly ring services stamp track))
- '(ibuffer-saved-filter-groups nil)
- '(ibuffer-saved-filters
-   '(("programming"
-      (or
-       (derived-mode . prog-mode)
-       (mode . ess-mode)
-       (mode . compilation-mode)))
-     ("text document"
-      (and
-       (derived-mode . text-mode)
-       (not
-        (starred-name))))
-     ("TeX"
-      (or
-       (derived-mode . tex-mode)
-       (mode . latex-mode)
-       (mode . context-mode)
-       (mode . ams-tex-mode)
-       (mode . bibtex-mode)))
-     ("web"
-      (or
-       (derived-mode . sgml-mode)
-       (derived-mode . css-mode)
-       (mode . javascript-mode)
-       (mode . js2-mode)
-       (mode . scss-mode)
-       (derived-mode . haml-mode)
-       (mode . sass-mode)))
-     ("gnus"
-      (or
-       (mode . message-mode)
-       (mode . mail-mode)
-       (mode . gnus-group-mode)
-       (mode . gnus-summary-mode)
-       (mode . gnus-article-mode)))))
- '(magit-commit-arguments nil)
- '(magit-log-arguments
-   '("--graph" "--color" "--decorate" "--show-signature" "-n256"))
- '(package-selected-packages
-   '(transpose-frame json-mode info-colors whole-line-or-region lsp-ui lsp-java dap-mode typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress markdown-mode key-chord js2-mode ivy inf-mongo ido-vertical-mode hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cider cask beacon avy anzu ag ace-jump-zap))
- '(safe-local-variable-values
-   '((haskell-stylish-on-save)
-     (intero-targets "simple-hpack:test:simple-hpack-test")
-     (haskell-process-args-stack-ghci "--ghci-options=-ferror-spans" "--no-build" "--no-load"))))
 (put 'narrow-to-region 'disabled nil)
 (put 'narrow-to-page 'disabled nil)
 
@@ -1337,7 +1268,7 @@ point reaches the beginning or end of the buffer, stop there."
   :config
   (setq shr-use-fonts nil))
 
-(use-package conf-mode
+(use-package conf-mode ;; Mode for Unix and Windows Conf files and Java properties
   :bind (:map conf-mode-map
               ("C-c r" . gdscript-hydra-show)))
 
@@ -1355,7 +1286,10 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package restclient-mode
   :hook ((restclient-mode . smartparens-mode)
          (restclient-mode . subword-mode))
-  :bind (("C-c C-o" . open-template-in-browser)))
+  :bind (:map
+         restclient-mode-map ("C-c C-o" . open-template-in-browser)
+         :map
+         json-mode-map ("C-c C-o" . open-template-in-browser)))
 
 (use-package lsp-mode :hook ((lsp-mode . lsp-enable-which-key-integration))
   :config (setq lsp-completion-enable-additional-text-edit nil))
@@ -1366,7 +1300,7 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package ibuffer
   :config
   :bind (("M-o" . other-window)
-         :map global-map ("C-x C-b" . ibuffer)))
+         ("C-x C-b" . ibuffer)))
 
 (use-package transpose-frame
   :config
@@ -1378,9 +1312,63 @@ point reaches the beginning or end of the buffer, stop there."
 ;; keybindings you’ve set throughout your ‘.emacs’ file
 ;; ...
 
-
 (use-package org
   :config
   (setq
    org-special-ctrl-a/e t
    org-M-RET-may-split-line nil))
+
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(bmkp-last-as-first-bookmark-file "~/.emacs.d/bookmarks")
+ '(company-ghc-show-info t)
+ '(company-quickhelp-use-propertized-text nil)
+ '(erc-modules
+   '(autojoin button completion fill irccontrols list match menu move-to-prompt netsplit networks noncommands readonly ring services stamp track))
+ '(ibuffer-saved-filter-groups nil)
+ '(ibuffer-saved-filters
+   '(("programming"
+      (or
+       (derived-mode . prog-mode)
+       (mode . ess-mode)
+       (mode . compilation-mode)))
+     ("text document"
+      (and
+       (derived-mode . text-mode)
+       (not
+        (starred-name))))
+     ("TeX"
+      (or
+       (derived-mode . tex-mode)
+       (mode . latex-mode)
+       (mode . context-mode)
+       (mode . ams-tex-mode)
+       (mode . bibtex-mode)))
+     ("web"
+      (or
+       (derived-mode . sgml-mode)
+       (derived-mode . css-mode)
+       (mode . javascript-mode)
+       (mode . js2-mode)
+       (mode . scss-mode)
+       (derived-mode . haml-mode)
+       (mode . sass-mode)))
+     ("gnus"
+      (or
+       (mode . message-mode)
+       (mode . mail-mode)
+       (mode . gnus-group-mode)
+       (mode . gnus-summary-mode)
+       (mode . gnus-article-mode)))))
+ '(magit-commit-arguments nil)
+ '(magit-log-arguments
+   '("--graph" "--color" "--decorate" "--show-signature" "-n256"))
+ '(package-selected-packages
+   '(ivy counsel transpose-frame json-mode info-colors whole-line-or-region lsp-ui lsp-java dap-mode typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress markdown-mode key-chord js2-mode inf-mongo hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cider cask beacon avy anzu ag ace-jump-zap))
+ '(safe-local-variable-values
+   '((haskell-stylish-on-save)
+     (intero-targets "simple-hpack:test:simple-hpack-test")
+     (haskell-process-args-stack-ghci "--ghci-options=-ferror-spans" "--no-build" "--no-load"))))
