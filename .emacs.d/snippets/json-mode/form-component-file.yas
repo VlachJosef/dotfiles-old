@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: file - form component
+# binding: C-c C-v C-f
+# key: file
+# group: gform
+# --
+`(is-first-object)`{
+  "id": "$1",
+  "type": "file",
+  "label": "$2"
+}`(is-last-object)`

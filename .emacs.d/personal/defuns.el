@@ -6,47 +6,6 @@
 (defun personal (library)
   (load (concat "~/.emacs.d/personal/" (symbol-name library)) 'no-error))
 
-;; Insert the filepath of buffer into the active buffer
-(defun insert-other-buffer-file-name ()
-  "Insert the full filepath of a buffer into the current buffer"
-  (interactive)
-  (insert (buffer-file-name
-	   (get-buffer
-	    (ido-completing-read
-	     "Select a buffer to get filename from: "
-	     (loop for buf being the buffers
-		   when (buffer-file-name buf)
-		   collect (buffer-name buf) into file-buffers
-		   finally return file-buffers))))))
-
-;;https://www.emacswiki.org/emacs/ToggleWindowSplit
-;; (defun toggle-window-split ()
-;;   (interactive)
-;;   (if (= (count-windows) 2)
-;;       (let* ((this-win-buffer (window-buffer))
-;; 	     (next-win-buffer (window-buffer (next-window)))
-;; 	     (this-win-edges (window-edges (selected-window)))
-;; 	     (next-win-edges (window-edges (next-window)))
-;; 	     (this-win-2nd (not (and (<= (car this-win-edges)
-;; 					 (car next-win-edges))
-;; 				     (<= (cadr this-win-edges)
-;; 					 (cadr next-win-edges)))))
-;; 	     (splitter
-;; 	      (if (= (car this-win-edges)
-;; 		     (car (window-edges (next-window))))
-;; 		  'split-window-horizontally
-;; 		'split-window-vertically)))
-;; 	(delete-other-windows)
-;; 	(let ((first-win (selected-window)))
-;; 	  (funcall splitter)
-;; 	  (if this-win-2nd (other-window 1))
-;; 	  (set-window-buffer (selected-window) this-win-buffer)
-;; 	  (set-window-buffer (next-window) next-win-buffer)
-;; 	  (select-window first-win)
-;; 	  (if this-win-2nd (other-window 1))))))
-;;
-;;(define-key ctl-x-4-map "t" 'toggle-window-split)
-
 (defun normalize-import (import)
   (let* ((normalized (s-replace " " "" (s-collapse-whitespace import)))
 	 (prefixAndClassList (s-split "{" normalized)))
@@ -60,7 +19,7 @@
       (size nil)))) ; input is broken, it is not valid scala import, let's return empty list
 
 (defun normalize-and-sort (input search-term)
-  (let ((all-imports (sort (apply #'append (mapcar 'normalize-import input)) 'string<)))
+  (let ((all-imports (delete-dups (sort (apply #'append (mapcar 'normalize-import input)) 'string<))))
     (cl-remove-if-not (lambda (import) (string-match search-term import)) all-imports)))
 
 (defun search-import (search-term)
@@ -74,7 +33,7 @@ Prefix arguments:
    C-- C-u - don't normalize and copy current import to kill ring"
   (interactive
    (list (read-from-minibuffer
-          (projectile-prepend-project-name "Ag search for import: ")
+          (projectile-prepend-project-name "rg search for import: ")
           (projectile-symbol-or-selection-at-point))))
   (let ((identity2 (lambda (input search-term) input))
         (normalization-function)
@@ -89,24 +48,24 @@ Prefix arguments:
 			      (setq copy-to-kill-ring t))
 		     (progn (setq normalization-function `identity2)
 			    (setq copy-to-kill-ring t)))))
-    (if (and (executable-find "ag") (executable-find "sort") (executable-find "uniq"))
+    (if (and (executable-find "rg") (executable-find "sort") (executable-find "uniq"))
 	(let* ((default-directory (projectile-project-root))
-	       (res-raw (shell-command-to-string (format "ag import.*%s --nonumbers --noheading --nofilename --nobreak --ignore-case | sort | uniq" search-term)))
+	       (res-raw (shell-command-to-string (format "rg import.*%s --no-line-number --no-filename --no-heading | sort | uniq" search-term)))
 	       (lines (split-string (s-replace "import " "" (s-trim res-raw)) "\n"))
 	       (import (with-temp-buffer
 			 (insert (mapconcat (lambda (elm) (s-trim-left elm)) lines "\n"))
 			 (sort-lines nil (point-min) (point-max))
-			 (ido-completing-read "Select an import: " (funcall normalization-function (split-string (buffer-string) "\n") search-term)))))
+			 (ivy-completing-read "Select an import: " (funcall normalization-function (split-string (buffer-string) "\n") search-term) nil nil (concat "." search-term "$")))))
 	  (if copy-to-kill-ring
 	      (progn (kill-new (format "import %s" import))
 		     (message "%s added to kill ring" import))
 	    (ensime-insert-import import)))
-      (error "Commands 'ag', 'sort' and 'uniq' are required to use this command"))))
+      (error "Commands 'rg', 'sort' and 'uniq' are required to use this command"))))
 
-(define-key global-map (kbd "s-i" ) `search-import)
+(define-key global-map (kbd "s-i" ) 'search-import)
 
 ;;(define-key global-map (kbd "C-x 4 s" ) `sbt-switch-to-active-sbt-buffer)
-(define-key global-map (kbd "C-x 4 s" ) `sbt-or-sgm:sbt-or-ghci)
+(define-key global-map (kbd "C-x 4 s" ) 'sbt-or-sgm:sbt-or-ghci)
 
 ;; Taken from
 ;; https://www.emacswiki.org/emacs/KeyboardMacrosTricks
@@ -131,49 +90,49 @@ Prefix arguments:
 	  (rest-of-letters (substring string 1)))
       (format "%s%s" (downcase first-letter) rest-of-letters))))
 
-(defun insert-or-replace-word (word)
-  (let ((search-for (string-match "\\[.*] Ag search for (default \\(.*)\\): " (minibuffer-prompt)))
+(defun insert-or-replace-word (scala-symbol)
+  (let ((search-for (string-match ".*rg: \\(.*\\)" (minibuffer-prompt)))
         (result (match-string-no-properties 1)))
     (when (string= "" (minibuffer-contents-no-properties))
-          (insert (format "%s" result)))
-    (move-beginning-of-line 1)
-    (let ((defs '("new" "class" "object" "trait" "val" "def" "type")))
-      (when (member word defs)
-        (cond ((member (word-at-point) defs)
-               (progn
-                 (delete-region (beginning-of-thing 'word) (+ 1 (end-of-thing 'word)))
-                 (insert (format "%s " word))
-                 (move-end-of-line 1)))
-              (t
-               (progn
-                 (insert (format "%s" word))
-                 (move-end-of-line 1))))))))
+      (insert (format "%s" result)))
+    (save-excursion
+      (move-beginning-of-line 1)
+      (let ((defs '(new class object trait val def type)))
+        (let ((name (symbol-name scala-symbol))
+              (name-at-point (symbol-at-point)))
+          (cond ((member name-at-point defs)
+                 (delete-region (beginning-of-thing 'symbol) (+ 1 (end-of-thing 'symbol)))
+                 (when (not (equal scala-symbol name-at-point))
+                   (insert (format "%s " name))))
+                (t
+                 (insert (format "%s " name)))))))))
 
 (defun delete-word ()
-  (move-beginning-of-line 1)
-  (let ((defs '("new" "class" "object" "trait" "val" "def" "type")))
-    (cond ((member (word-at-point) defs)
-	   (progn (delete-region (beginning-of-thing 'word) (+ 1 (end-of-thing 'word)))
-		  (move-end-of-line 1)))))
-  (move-end-of-line 1))
+  (save-excursion
+    (move-beginning-of-line 1)
+    (let ((defs '(new class object trait val def type)))
+      (cond ((member (symbol-at-point) defs)
+	     (progn (delete-region (beginning-of-thing 'symbol) (+ 1 (end-of-thing 'symbol)))
+		    (move-end-of-line 1)))))))
 
 (defhydra scala-minibuffer-search ()
   "
 Search for _n_ new _c_ class _t_ trait _o_ object _v_ val _d_ def _y_ type _q_ quit"
-    ("n" (insert-or-replace-word "new") nil)
-    ("c" (insert-or-replace-word "class") nil)
-    ("t" (insert-or-replace-word "trait") nil)
-    ("o" (insert-or-replace-word "object") nil)
-    ("d" (insert-or-replace-word "def") nil)
-    ("v" (insert-or-replace-word "val") nil)
-    ("y" (insert-or-replace-word "type") nil)
+    ("n" (insert-or-replace-word 'new) nil)
+    ("c" (insert-or-replace-word 'class) nil)
+    ("t" (insert-or-replace-word 'trait) nil)
+    ("o" (insert-or-replace-word 'object) nil)
+    ("d" (insert-or-replace-word 'def) nil)
+    ("v" (insert-or-replace-word 'val) nil)
+    ("y" (insert-or-replace-word 'type) nil)
     ("q" (delete-word) nil :color blue))
 
 (defun mini-hook ()
   (if (and
        (functionp 'sbt:find-root)
        (sbt:find-root)
-       (string-match "\\[.*] Ag search for (default .*): " (minibuffer-prompt)))
+       ;;(string-match ".*rg ?(app)*?:.*" (minibuffer-prompt)))
+       (string-match ".*rg.*" (minibuffer-prompt)))
       (scala-minibuffer-search/body)))
 
 (add-hook 'minibuffer-setup-hook 'mini-hook)
@@ -312,13 +271,18 @@ Rest client: _s_ last _d_ open _r_ reset _q_ quit"
 
 (define-key global-map (kbd "C-x m" ) `tut-toggle-between-scala-and-markdown)
 
-
 (defun nxml-pretty-format ()
-    (interactive)
-    (save-excursion
-        (shell-command-on-region (point-min) (point-max) "xmllint --format -" (buffer-name) t)
-        (nxml-mode)
-        (indent-region begin end)))
+  (interactive)
+  (let ((buffer-string (buffer-string))
+        (point (point))
+        (exit-code (shell-command-on-region (point-min) (point-max) "xmllint --format -" (buffer-name) t "*xmllint errors*" t)))
+    (cond ((zerop exit-code)
+           (deactivate-mark)
+           (nxml-mode))
+          ((eq 1 exit-code)
+           (when (s-blank? (buffer-string))
+             (insert buffer-string)
+             (goto-char point))))))
 
 
 (defun defly ()
@@ -398,7 +362,9 @@ Rest client: _s_ last _d_ open _r_ reset _q_ quit"
 
 (defconst gform-environments
   '("http://localhost:9196/gform/formtemplates"
-    "http://localhost:9396/gform/formtemplates"))
+    "http://localhost:9396/gform/formtemplates"
+    "https://www.qa.tax.service.gov.uk/submissions/test-only/proxy-to-gform/gform/formtemplates"
+    "https://www.staging.tax.service.gov.uk/submissions/test-only/proxy-to-gform/gform/formtemplates"))
 
 (defvar gform-last-url (car gform-environments))
 
@@ -421,6 +387,8 @@ Rest client: _s_ last _d_ open _r_ reset _q_ quit"
          (restclient-http-send-current)
          (set-buffer-multibyte t)
          (message "Uploading rest-client buffer %s" (buffer-name buffer)))))))
+
+
 
 (defun upload-template (prefix-arg)
   (interactive "p")
@@ -445,13 +413,25 @@ X-requested-with: foo
       (restclient-http-send-current-stay-in-window))
     (message "Uploading json-mode buffer %s to %s" (buffer-name (current-buffer)) gform-last-url)))
 
-(defun open-template-in-browser ()
-  (interactive)
+
+(defconst gform-environments-new-form
+  '("http://localhost/submissions/new-form/"
+    "http://localhost:9295/submissions/new-form/"
+    "https://www.qa.tax.service.gov.uk/submissions/new-form/"
+    "https://www.staging.tax.service.gov.uk/submissions/new-form/"))
+
+(defvar gform-last-new-form-url (car gform-environments-new-form))
+
+(defun open-template-in-browser (prefix-arg)
+  (interactive "p")
   (let ((find-template-id-regex "\"_id\"[[:space:]]*:[[:space:]]*\"\\([a-zA-Z0-9-]*\\)\""))
+    (when (eq 4 prefix-arg)
+      (let ((url (projectile-completing-read  "Choose environment: " gform-environments-new-form)))
+        (setq gform-last-new-form-url url)))
     (save-excursion
       (goto-char (point-min))
       (re-search-forward find-template-id-regex)
-      (browse-url (concat "http://localhost/submissions/new-form/" (match-string 1))))))
+      (browse-url (concat gform-last-new-form-url (match-string 1))))))
 
 (defun gform-hmrc-start ()
   (interactive)
@@ -483,3 +463,205 @@ X-requested-with: foo
 
 (defun gform-run-microservice ()
   (sbt-hydra:run "microservice"))
+
+(defun playframework-project-app-dir ()
+  "If current project is play framework project return its app directory, otherwise return nil"
+  (when-let ((project-root (projectile-project-root))
+             (app-dir (concat project-root "app")))
+    (when (and (file-directory-p app-dir)
+               (eq 'sbt (projectile-project-type app-dir)))
+      app-dir)))
+
+(defun my/symbol-or-selection-at-point ()
+  (let ((selection (projectile-symbol-or-selection-at-point)))
+    ;;(ivy-toggle-regexp-quote)
+    ;;(regexp-quote (replace-regexp-in-string " " "  " selection))
+    ;;(regexp-quote selection)
+    selection
+    ))
+
+(defvar look-for-thing-at-point-in-app-only-p t)
+(defvar literal-counsel-rg-p t)
+
+(defun look-for-thing-at-point ()
+  (interactive)
+  ;; Sort result by path
+  (let ((app-dir (playframework-project-app-dir)))
+    (if (and look-for-thing-at-point-in-app-only-p app-dir)
+        (if literal-counsel-rg-p
+            (run-literal-rg app-dir)
+          (run-vanilla-rg app-dir))
+      (if literal-counsel-rg-p
+          (run-literal-rg nil)
+        (run-vanilla-rg nil)))))
+
+(defun run-literal-rg (app-dir)
+  (let ((counsel-rg-base-command "rg -M 240 --with-filename --no-heading --line-number --fixed-strings %s")
+        (counsel-ag-command "rg -M 240 --with-filename --no-heading --line-number --fixed-strings %s"))
+    (literal-counsel-rg (my/symbol-or-selection-at-point) app-dir (format "literal-rg%s: " (if app-dir " (app)" "")))))
+
+(defun run-vanilla-rg (app-dir)
+  (let ((counsel-rg-base-command "rg -M 240 --with-filename --no-heading --line-number  --color never %s"))
+    (counsel-rg (my/symbol-or-selection-at-point) app-dir nil (format "vanilla-rg%s: " (if app-dir " (app)" "")))))
+
+(defun my-shell-quote-argument (argument)
+  (format "'%s'" argument))
+
+(defun literal-counsel-rg (&optional initial-input initial-directory ag-prompt)
+  "Grep for a string in a root directory using ag.
+
+By default, the root directory is the first directory containing a .git subdirectory.
+
+INITIAL-INPUT can be given as the initial minibuffer input.
+INITIAL-DIRECTORY, if non-nil, is used as the root directory for search.
+EXTRA-AG-ARGS, if non-nil, is appended to `counsel-ag-base-command'.
+AG-PROMPT, if non-nil, is passed as `ivy-read' prompt argument.
+CALLER is passed to `ivy-read'.
+
+With a `\\[universal-argument]' prefix argument, prompt for INITIAL-DIRECTORY.
+With a `\\[universal-argument] \\[universal-argument]' prefix argument, \
+prompt additionally for EXTRA-AG-ARGS."
+  (interactive)
+  (let ((default-directory (or initial-directory (counsel--git-root))))
+    (ivy-read ag-prompt
+              #'literal-counsel-rg-function
+              :initial-input initial-input
+              :dynamic-collection t
+              :keymap counsel-ag-map
+              :history 'counsel-git-grep-history
+              :action #'counsel-git-grep-action
+              :require-match t
+              :caller 'counsel-rg)))
+
+(defun literal-counsel-rg-function (string)
+  "Grep in the current directory for STRING."
+  (let* ((command-args (counsel--split-command-args string))
+         (search-term (cdr command-args)))
+    (or
+     (let ((ivy-text search-term))
+       (ivy-more-chars))
+     (let* ((regex search-term)
+            (switches (concat (car command-args)
+                              (counsel--ag-extra-switches regex)
+                              (if (ivy--case-fold-p string)
+                                  " -i "
+                                " -s "))))
+
+       (counsel--async-command (counsel--format-ag-command switches (format "'%s'" regex)))
+       nil))))
+
+(defun test-2 ()
+  (let ((proc (start-file-process-shell-command
+              "test-name"
+              (get-buffer-create "test-name")
+              "rg -M 242 --with-filename --no-heading --line-number  --color never  --fixed-strings  Future\\[ValidatedType\\[ValidatorsResult\\]\\]")))
+   (set-process-sentinel proc #'counsel--async-sentinel)
+   (message "[counsel-ag-function] proc: %s" proc)))
+
+(defun counsel-rg (&optional initial-input initial-directory extra-rg-args rg-prompt)
+  "Grep for a string in the current directory using rg.
+INITIAL-INPUT can be given as the initial minibuffer input.
+INITIAL-DIRECTORY, if non-nil, is used as the root directory for search.
+EXTRA-RG-ARGS string, if non-nil, is appended to `counsel-rg-base-command'.
+RG-PROMPT, if non-nil, is passed as `ivy-read' prompt argument.
+
+Example input with inclusion and exclusion file patterns:
+    require i -- -g*.el"
+  (interactive)
+  (let ((counsel-ag-base-command
+         (if (listp counsel-rg-base-command)
+             (append counsel-rg-base-command (counsel--rg-targets))
+           (concat counsel-rg-base-command " "
+                   (mapconcat #'shell-quote-argument (counsel--rg-targets) " "))))
+        (counsel--grep-tool-look-around
+         (let ((rg (car (if (listp counsel-rg-base-command) counsel-rg-base-command
+                          (split-string counsel-rg-base-command))))
+               (switch "--pcre2"))
+           (and (eq 0 (call-process rg nil nil nil switch "--pcre2-version"))
+                switch))))
+    (counsel-ag initial-input initial-directory extra-rg-args rg-prompt
+                :caller 'counsel-rg)))
+
+(cl-defun counsel-ag (&optional initial-input initial-directory extra-ag-args ag-prompt
+                      &key caller)
+  "Grep for a string in a root directory using ag.
+
+By default, the root directory is the first directory containing a .git subdirectory.
+
+INITIAL-INPUT can be given as the initial minibuffer input.
+INITIAL-DIRECTORY, if non-nil, is used as the root directory for search.
+EXTRA-AG-ARGS, if non-nil, is appended to `counsel-ag-base-command'.
+AG-PROMPT, if non-nil, is passed as `ivy-read' prompt argument.
+CALLER is passed to `ivy-read'.
+
+With a `\\[universal-argument]' prefix argument, prompt for INITIAL-DIRECTORY.
+With a `\\[universal-argument] \\[universal-argument]' prefix argument, \
+prompt additionally for EXTRA-AG-ARGS."
+  (interactive)
+  (setq counsel-ag-command counsel-ag-base-command)
+  (setq counsel--regex-look-around counsel--grep-tool-look-around)
+  (counsel-require-program counsel-ag-command)
+  (let ((prog-name (car (if (listp counsel-ag-command) counsel-ag-command
+                          (split-string counsel-ag-command))))
+        (arg (prefix-numeric-value current-prefix-arg)))
+    (when (>= arg 4)
+      (setq initial-directory
+            (or initial-directory
+                (counsel-read-directory-name (concat
+                                              prog-name
+                                              " in directory: ")))))
+    (when (>= arg 16)
+      (setq extra-ag-args
+            (or extra-ag-args
+                (read-from-minibuffer (format "%s args: " prog-name)))))
+    (setq counsel-ag-command (counsel--format-ag-command (or extra-ag-args "") "%s"))
+    (let ((default-directory (or initial-directory
+                                 (counsel--git-root)
+                                 default-directory)))
+      (message "[counsel-rg] counsel--regex-look-around: %s" counsel--regex-look-around)
+      (message "[counsel-rg] counsel-ag-command        : %s" counsel-ag-command)
+      (message "[counsel-rg] initial-input             : %s" initial-input)
+      (ivy-read (or ag-prompt
+                    (concat prog-name ": "))
+                #'counsel-ag-function
+                :initial-input initial-input
+                :dynamic-collection t
+                :keymap counsel-ag-map
+                :history 'counsel-git-grep-history
+                :action #'counsel-git-grep-action
+                :require-match t
+                :caller (or caller 'counsel-ag)))))
+
+
+(defun abc (x)
+  (when (eq this-command 'ivy-dispatching-done)
+    (setq look-for-thing-at-point-in-app-only-p (not look-for-thing-at-point-in-app-only-p))
+    (look-for-thing-at-point)))
+
+(defun literal-vanilla-rg-toggle (x)
+  (when (eq this-command 'ivy-dispatching-done)
+    (setq literal-counsel-rg-p (not literal-counsel-rg-p))
+    (look-for-thing-at-point)))
+
+(defun my-action-1 (x)
+  (message "action-1: %s" x))
+
+(ivy-set-actions
+ 'counsel-rg
+ '(("m" abc "search in whole project")
+   ("l" literal-vanilla-rg-toggle "literal / vanilla rg")))
+
+(defun ivy-switch-buffer-plain ()
+  (interactive)
+  (let ((ivy-display-style 'plain)) ;; 'fancy display style is somehow broken in switch-buffer minibuffer completion
+    (ivy-switch-buffer)))
+
+(defun show-messages ()
+  (interactive)
+  (delete-other-windows)
+  (let* ((messages (get-buffer-create "*Messages*"))
+         (left (selected-window))
+         (right (split-window left nil t)))
+    (set-window-buffer right messages)
+    (with-current-buffer messages
+      (set-window-point right (point-max)))))

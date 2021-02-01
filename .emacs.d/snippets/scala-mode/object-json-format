@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: object A { implicit val aFormat = Json.format[A] }
+# binding: C-c C-c C-o
+# --
+object $1 {
+  implicit val ${1:$(downcase-first-letter-only yas-text)}Format = Json.format[$1]
+}

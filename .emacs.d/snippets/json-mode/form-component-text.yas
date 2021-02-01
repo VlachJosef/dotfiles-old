@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: text - form component
+# binding: C-c C-v C-t
+# key: text
+# group: gform
+# --
+`(is-first-object)`{
+  "id": "$1",
+  "type": "text",
+  "label": "$2",
+  "format": "shortText "
+}`(is-last-object)`

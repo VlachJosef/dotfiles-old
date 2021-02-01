@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: destination-state-transition
+# binding: C-c C-v C-d C-s
+# group: gform
+
+# --
+{
+  "id": "transitionToSubmitted",
+  "type": "stateTransition",
+  "requiredState": "Submitted"
+}

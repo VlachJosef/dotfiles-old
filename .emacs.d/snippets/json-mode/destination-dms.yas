@@ -1,0 +1,15 @@
+# -*- mode: snippet -*-
+# name: destination-dms
+# binding: C-c C-v C-d C-d
+# --
+{
+  "id": "dmsQueue",
+  "type": "hmrcDms",
+  "includeIf": "true",
+  "failOnError": true,
+  "convertSingleQuotes": true,
+  "dmsFormId": "FOO",
+  "customerId": "${' '}",
+  "classificationType": "BAR",
+  "businessArea": "BAZ"
+}

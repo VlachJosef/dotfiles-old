@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: val implicit abcFormat = Json.format[Abc]
+# binding: C-c C-c C-n
+# --
+implicit val ${1:$(downcase-first-letter-only yas-text)}Format = Json.format[$1]

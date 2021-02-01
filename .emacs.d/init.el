@@ -1,6 +1,12 @@
 ;; init.el --- Emacs configuration -*- lexical-binding: t; -*-
+
+(set-register ?i "g")
+(set-register ?o "d")
+(set-register ?f "\"format\": \"shortText\",")
+
 ;; (describe-personal-keybindings)
-(setq debug-on-error nil)
+;; You can always see what's going on under the hood of use-package (or any other elisp macro) by calling M-x pp-macroexpand-last-sexp after the form
+(setq debug-on-error t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; This section is for global settings for built-in emacs parameters
 (setq-default indent-tabs-mode nil)
@@ -113,6 +119,7 @@
 (add-to-list 'load-path "~/develop-ensime/emacs-sbt-mode/")
 (add-to-list 'load-path "~/develop-emacs/restclient.el/")
 (add-to-list 'load-path "~/develop-emacs/println-debugger/")
+(add-to-list 'load-path "~/develop-emacs/spark-runner/")
 (add-to-list 'load-path "~/develop-emacs/scala-utils/")
 (add-to-list 'load-path "~/develop-emacs/ag-haskell-hydra/")
 (add-to-list 'load-path "~/develop-emacs/simple-ghci-mode/")
@@ -122,21 +129,20 @@
 ;;(add-to-list 'load-path "~/.emacs.d/gited/")
 ;;(add-to-list 'load-path "~/.emacs.d/ghcid/")
 (add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode/")
-;;(add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode-debugger/")
+(add-to-list 'load-path "~/develop-emacs/sbt-rpc-client.el/")
+;(add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode-debugger/")
 (add-to-list 'load-path "~/.emacs.d/ensime-emacs/")
 
 ;;(require 'hs-lint)
-(require 'ag-haskell-hydra)
-(require 'simple-ghci-mode)
-;;(require 'json-mode)
+;;(require 'ag-haskell-hydra)
+;;(require 'simple-ghci-mode)
+;;(require 'jsonb-mode)
 (require 'sdcv-mode)
 (require 'ensime-editor)
+(require 'sbt-rpc-client-connect)
 ;;(require 'gited)
 ;;(define-key dired-mode-map "\C-x\C-g" 'gited-list-branches)
 
-(use-package json-mode
-  :config
-  (local-unset-key [(control meta ?x)]))
 
 (use-package so-long
   :config (global-so-long-mode 1))
@@ -196,8 +202,6 @@
     (setq erc-track-exclude-types '("JOIN" "NICK" "PART" "QUIT"))
     (erc-timestamp-mode t)
     (erc-track-mode t)))
-
-;; /msg NickServ REGISTER 1234567890aA. ipikatcu@gmail.com
 
 (use-package scala-utils)
 (global-set-key (kbd "C-s-:") 'scala-utils:wrap-in-braces)
@@ -348,6 +352,7 @@
   (ivy-mode 1)
   :config
   (setq ivy-display-style 'fancy)
+  ;;(setcdr (assoc 'counsel-M-x ivy-initial-inputs-alist) "") ;; get rid of ^ in M-x prompt
   :bind
   (:map ivy-mode-map
         ("C-x b" . ivy-switch-buffer-plain))
@@ -356,9 +361,13 @@
         ("s-F" . scala-minibuffer-search/body)
         ("M-k" . ivy-dispatching-done)))
 
+(use-package counsel
+  :config
+  (setcdr (assoc 'counsel-M-x ivy-initial-inputs-alist) "")) ;; get rid of ^ in M-x prompt)
+
 (use-package ivy-hydra
   :ensure t
-  :after (ivy hydra))
+  :after (hydra))
 
 (use-package projectile
   :diminish projectile-mode
@@ -473,13 +482,13 @@
   (define-key company-active-map [tab] nil)
   (define-key company-active-map (kbd "TAB") nil))
 
-;; (use-package yasnippet
-;;   ;;:diminish yas-minor-mode
-;;   :commands yas-minor-mode
-;;   :config
-;;   (yas-reload-all)
-;;   ;; (define-key yas-minor-mode-map [tab] #'yas-expand)
-;;   )
+(use-package yasnippet
+  ;;:diminish yas-minor-mode
+  ;':commands yas-minor-mode
+  :config
+  (yas-reload-all) ;; Load snippets when launching Emacs
+  ;; (define-key yas-minor-mode-map [tab] #'yas-expand)
+  )
 
 ;;(require 'ido-vertical-mode)
 ;;(ido-mode 1)
@@ -545,46 +554,20 @@
 
 (use-package emacs
   :init
-  (setq backward-delete-char-untabify-method 'all)
+  (setq backward-delete-char-untabify-method nil)
   :bind ("C-M-j" . join-line))
 
-(use-package emacs-lisp
-  :bind (:map
-         emacs-lisp-mode-map
-         ([remap sp-previous-sexp] . println2)
-         ([remap sp-next-sexp] . println)
-         ("C-M-p" . println2)
-         ("C-M-n" . println)))
-
 (use-package scala-mode
-  ;;//:interpreter
-  ;;("scala" . scala-mode)
   :init
   (setq scala-indent:use-javadoc-style t
         scala-indent:align-parameters t)
-  ;;:config
-  ;; (bind-key "RET" `scala-mode-newline-comments scala-mode-map)
-  ;; (bind-key "C-c c" `sbt-command scala-mode-map)
-  ;; (bind-key "M-SPC" `scala-indent:fixup-whitespace)
-  ;; (bind-key "C-M-j" `scala-indent:join-line)
-  ;; (bind-key "C-M-n" `println)
-  ;; (bind-key "C-c e" `next-error)
-  ;; (bind-key "TAB" `indent-according-to-mode scala-mode-map)
-  ;;(bind-key "C-M-n" nil smartparens-mode-map)
-  ;;;(bind-key "C-M-p" nil smartparens-mode-map)
-
   ;; Any binding occurring before the first use of :map are applied to the global keymap
   :bind (:map
          scala-mode-map
-         ([remap sp-previous-sexp] . println2)
-         ([remap sp-next-sexp] . println)
+         ([remap delete-backward-char] . backward-delete-char-untabify )
          ("RET" . scala-mode-newline-comments)
-         ("DEL" . backward-delete-char-untabify)
          ("M-SPC" . scala-indent:fixup-whitespace)
-         ("C-M-j" . scala-indent:join-line)
-         ("C-M-p" . println2)
-         ("C-M-n" . println)
-         ("TAB" . indent-according-to-mode)))
+         ("C-M-j" . scala-indent:join-line)))
 
 (add-hook 'scala-mode-hook
           (lambda ()
@@ -596,7 +579,6 @@
                   comment-empty-lines t)
             ;;(electric-pair-mode)
             (rainbow-delimiters-mode)
-            ;;(yas-minor-mode t)
             (company-mode t)
             (smartparens-mode) ;; smartparens must be below electric-*-modes
             (show-paren-mode)
@@ -614,9 +596,7 @@
             (smartparens-mode) ;; smartparens must be below electric-*-modes
             (show-paren-mode)
             (subword-mode)
-            (glasses-mode)
-            ;;(git-gutter-mode)
-            ))
+            (glasses-mode)))
 
 (use-package inf-mongo
   :init
@@ -665,9 +645,41 @@
             (prettify-symbols-mode)
             (eldoc-mode)))
 
-(use-package println-debugger
+(use-package spark-runner
   :config
-  :bind (:map global-map ("C-x C-k P" . print-ln)))
+  (setq spark-submit-executable "/Users/pepa/spark/spark-3.0.1-bin-hadoop3.2/bin/spark-submit")
+  :after (scala-mode sbt-mode)
+  :bind (:map scala-mode-map
+         ("C-c r" . spark-package)
+         :map sbt:mode-map
+         ("C-c r" . spark-package)))
+
+(use-package println-debugger
+  :after (scala-mode gdscript-mode)
+  :bind (
+         :map
+         global-map ("C-x C-k P" . print-ln)
+         :map
+         emacs-lisp-mode-map
+         ([remap sp-previous-sexp] . println2)
+         ([remap sp-next-sexp] . println)
+         ("C-M-p" . println2)
+         ("C-M-n" . println)
+         :map scala-mode-map
+         ([remap sp-previous-sexp] . println2)
+         ([remap sp-next-sexp] . println)
+         ("C-M-p" . println2)
+         ("C-M-n" . println)
+         :map gdscript-mode-map
+         ([remap sp-previous-sexp] . println2)
+         ([remap sp-next-sexp] . println)
+         ("C-M-p" . println2)
+         ("C-M-n" . println)
+         :map js-mode-map
+         ([remap sp-previous-sexp] . println2)
+         ([remap sp-next-sexp] . println)
+         ("C-M-p" . println2)
+         ("C-M-n" . println)))
 
 (use-package diminish
   :ensure t)
@@ -854,6 +866,10 @@
               ("C-c e" . sgm:next-error)
               ("s-F" . ahh:projectile-ag-regexp)))
 
+;; (use-package json-mode
+;;   :config
+;;   (local-unset-key [(control meta ?x)]))
+
 (use-package json-mode
   :config
   :bind (:map json-mode-map
@@ -865,7 +881,8 @@
                                (glasses-mode)
                                (smartparens-mode)
                                (company-mode)
-                               (rainbow-delimiters-mode)))
+                               (rainbow-delimiters-mode)
+                               (yas-minor-mode)))
 
 
 ;; (use-package hs-lint
@@ -1246,9 +1263,24 @@ point reaches the beginning or end of the buffer, stop there."
    rg-custom-type-aliases '(("gdscript" ."*.gd *.tscn")))
 
 
-  :bind (:map gdscript-mode-map
-              ("C-c C-r C-a" . gdscript-docs-browse-api)
-              ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point))
+  :bind (:map
+         gdscript-mode-map
+         ("C-c v" . gdscript-hydra-show)
+         ("C-c C-r C-a" . gdscript-docs-browse-api)
+         ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point)
+         :map
+         gdscript-comint--mode-map
+         ("C-c v" . gdscript-hydra-show)
+         ("C-c C-v" . comint-clear-buffer)
+         :map
+         gdscript-debug--inspector-mode-map
+         ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point)
+         :map
+         gdscript-debug--scene-tree-mode-map
+         ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point)
+         :map
+         gdscript-debug--stack-frame-vars-mode-map
+         ("C-c C-r C-o" . gdscript-docs-browse-symbol-at-point))
 
   :hook ((gdscript-mode . smartparens-mode)
          (gdscript-mode . subword-mode)
@@ -1287,15 +1319,13 @@ point reaches the beginning or end of the buffer, stop there."
   :hook ((restclient-mode . smartparens-mode)
          (restclient-mode . subword-mode))
   :bind (:map
-         restclient-mode-map ("C-c C-o" . open-template-in-browser)
-         :map
-         json-mode-map ("C-c C-o" . open-template-in-browser)))
+         restclient-mode-map ("C-c C-o" . open-template-in-browser)))
 
 (use-package lsp-mode :hook ((lsp-mode . lsp-enable-which-key-integration))
   :config (setq lsp-completion-enable-additional-text-edit nil))
 (use-package lsp-ui)
 (use-package lsp-java :config (add-hook 'java-mode-hook 'lsp))
-(use-package dap-mode :after lsp-mode :config (dap-auto-configure-mode))
+;;(use-package dap-mode :after lsp-mode :config (dap-auto-configure-mode))
 (use-package dap-java :ensure nil)
 (use-package ibuffer
   :config
@@ -1367,7 +1397,7 @@ point reaches the beginning or end of the buffer, stop there."
  '(magit-log-arguments
    '("--graph" "--color" "--decorate" "--show-signature" "-n256"))
  '(package-selected-packages
-   '(ivy counsel transpose-frame json-mode info-colors whole-line-or-region lsp-ui lsp-java dap-mode typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress markdown-mode key-chord js2-mode inf-mongo hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cider cask beacon avy anzu ag ace-jump-zap))
+   '(hydra json-mode ivy counsel transpose-frame info-colors whole-line-or-region lsp-ui lsp-java typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress markdown-mode key-chord js2-mode inf-mongo hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cask beacon avy anzu ag ace-jump-zap))
  '(safe-local-variable-values
    '((haskell-stylish-on-save)
      (intero-targets "simple-hpack:test:simple-hpack-test")

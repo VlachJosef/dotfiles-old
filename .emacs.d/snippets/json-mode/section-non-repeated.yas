@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: non repeated section
+# binding: C-c C-v C-s
+# key: section
+# group: gform
+# --
+`(is-first-object)`{
+  "title": "Page $1",
+  "fields": [
+    $2
+  ]
+}`(is-last-object)`
