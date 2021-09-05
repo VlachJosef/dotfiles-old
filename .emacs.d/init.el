@@ -2,11 +2,14 @@
 
 (set-register ?i "g")
 (set-register ?o "d")
+(set-register ?p "++3.0.0-RC2 update")
 (set-register ?f "\"format\": \"shortText\",")
+(set-register ?j "Json.prettyPrint(Json.toJson())")
 
 ;; (describe-personal-keybindings)
 ;; You can always see what's going on under the hood of use-package (or any other elisp macro) by calling M-x pp-macroexpand-last-sexp after the form
-(setq debug-on-error t)
+(setq debug-on-error nil)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; This section is for global settings for built-in emacs parameters
 (setq-default indent-tabs-mode nil)
@@ -70,6 +73,7 @@
 
 (add-hook 'sbt-mode-hook (lambda ()
                            (define-key comint-mode-map [remap comint-write-output] 'resend-last)
+                           (define-key comint-mode-map "\C-c\C-b" 'resend-last-suppress-response-buffer)
                            (add-hook 'before-save-hook 'sbt-hydra:check-modified-buffers)
                            ))
 
@@ -85,17 +89,16 @@
 ;;(add-hook 'after-save-hook 'sbt-run-previous-command)
 ;;(add-hook 'after-save-hook 'aaa-bbb)
 
-
 (defun clear-sbt-compilation-buffer ()
   (let ((current-sbt-root (sbt:find-root)))
     (loop for process being the elements of (process-list)
           for current-process-buffer = (process-buffer process)
           if (and
+              (buffer-live-p current-process-buffer)
               (bufferp current-process-buffer) ;; process must have associated buffer
               (with-current-buffer current-process-buffer
                 (and
                  (sbt:mode-p)
-                 (process-live-p process)
                  (string= (sbt:find-root) current-sbt-root))))
           do (progn
                (sbt:clear current-process-buffer)))))
@@ -130,6 +133,9 @@
 ;;(add-to-list 'load-path "~/.emacs.d/ghcid/")
 (add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode/")
 (add-to-list 'load-path "~/develop-emacs/sbt-rpc-client.el/")
+(add-to-list 'load-path "~/develop-emacs/sbt-test-runner.el/")
+(add-to-list 'load-path "~/develop-emacs/semanticdb-mode.el/")
+(add-to-list 'load-path "~/develop-emacs/javap-mode/")
 ;(add-to-list 'load-path "~/develop-godot/emacs-gdscript-mode-debugger/")
 (add-to-list 'load-path "~/.emacs.d/ensime-emacs/")
 
@@ -140,6 +146,9 @@
 (require 'sdcv-mode)
 (require 'ensime-editor)
 (require 'sbt-rpc-client-connect)
+(require 'sbt-test-munit)
+(require 'scala-semanticdb-mode)
+(require 'javap-mode)
 ;;(require 'gited)
 ;;(define-key dired-mode-map "\C-x\C-g" 'gited-list-branches)
 
@@ -361,6 +370,14 @@
         ("s-F" . scala-minibuffer-search/body)
         ("M-k" . ivy-dispatching-done)))
 
+(add-hook 'graphql-mode-hook
+          (lambda ()
+            (rainbow-delimiters-mode)
+            (smartparens-mode)
+            (show-paren-mode)
+            (subword-mode)
+            (glasses-mode)))
+
 (use-package counsel
   :config
   (setcdr (assoc 'counsel-M-x ivy-initial-inputs-alist) "")) ;; get rid of ^ in M-x prompt)
@@ -459,7 +476,7 @@
 (use-package sbt-mode
  :init
  (setq sbt:sbt-prompt-regexp "^\\(\\[[^\]]*\\] \\)?[>$][ ]*"
-       sbt:program-options '("-Djline.terminal=auto" "-Dsbt.supershell=false")
+       ;;sbt:program-options '("-Djline.terminal=auto" "-Dsbt.supershell=false")
        sbt-hydra:allowed-files-regexp '(".*.scala$" ".*/routes$" ".*.scala.html$"))
  ;;:bind (("C-c C-s" . restclient:save-single-buffer-and-make-rest-call))
  )
@@ -571,7 +588,7 @@
 
 (add-hook 'scala-mode-hook
           (lambda ()
-            (message "Running scala-mode-hook")
+            ;;(message "Running scala-mode-hook")
             (setq electric-indent-inhibit t ;; don't indent previous line when pressing enter
                   comment-start "/* "
                   comment-end " */"
@@ -655,31 +672,66 @@
          ("C-c r" . spark-package)))
 
 (use-package println-debugger
-  :after (scala-mode gdscript-mode)
-  :bind (
-         :map
-         global-map ("C-x C-k P" . print-ln)
+  :bind (:map
+         global-map ("C-x C-k P" . print-ln) ;; fallback while when package is unstable
          :map
          emacs-lisp-mode-map
-         ([remap sp-previous-sexp] . println2)
-         ([remap sp-next-sexp] . println)
-         ("C-M-p" . println2)
-         ("C-M-n" . println)
+         ([remap sp-previous-sexp] . println-insert-before)
+         ([remap sp-next-sexp] . println-insert-after)
+         ("C-M-p" . println-insert-before)
+         ("C-M-n" . println-insert-after)
          :map scala-mode-map
-         ([remap sp-previous-sexp] . println2)
-         ([remap sp-next-sexp] . println)
-         ("C-M-p" . println2)
-         ("C-M-n" . println)
+         ([remap sp-previous-sexp] . println-insert-before)
+         ([remap sp-next-sexp] . println-insert-after)
+         ("C-M-p" . println-insert-before)
+         ("C-M-n" . println-insert-after)
          :map gdscript-mode-map
-         ([remap sp-previous-sexp] . println2)
-         ([remap sp-next-sexp] . println)
-         ("C-M-p" . println2)
-         ("C-M-n" . println)
+         ([remap sp-previous-sexp] . println-insert-before)
+         ([remap sp-next-sexp] . println-insert-after)
+         ("C-M-p" . println-insert-before)
+         ("C-M-n" . println-insert-after)
          :map js-mode-map
-         ([remap sp-previous-sexp] . println2)
-         ([remap sp-next-sexp] . println)
-         ("C-M-p" . println2)
-         ("C-M-n" . println)))
+         ([remap sp-previous-sexp] . println-insert-before)
+         ([remap sp-next-sexp] . println-insert-after)
+         ("C-M-p" . println-insert-before)
+         ("C-M-n" . println-insert-after)))
+
+;; (use-package println-debugger-scala
+;;   :after scala-mode
+;;   :bind (
+;;          :map scala-mode-map
+;;          ([remap sp-previous-sexp] . println-insert-before)
+;;          ([remap sp-next-sexp] . println-insert-after)
+;;          ("C-M-p" . println-insert-before)
+;;          ("C-M-n" . println-insert-after)))
+;;
+;;
+;;
+;; (use-package println-debugger-emacs-lisp
+;;   :bind (
+;;          :map emacs-lisp-mode-map
+;;          ([remap sp-previous-sexp] . println-insert-before)
+;;          ([remap sp-next-sexp] . println-insert-after)
+;;          ("C-M-p" . println-insert-before)
+;;          ("C-M-n" . println-insert-after)))
+;;
+;; (use-package println-debugger-javascript
+;;   :after js
+;;   :bind (
+;;          :map js-mode-map
+;;          ([remap sp-previous-sexp] . println-insert-before)
+;;          ([remap sp-next-sexp] . println-insert-after)
+;;          ("C-M-p" . println-insert-before)
+;;          ("C-M-n" . println-insert-after)))
+;;
+;; (use-package println-debugger-gdcsript
+;;   :after gdscript-mode
+;;   :bind (
+;;          :map gdscript-mode-map
+;;          ([remap sp-previous-sexp] . println-insert-before)
+;;          ([remap sp-next-sexp] . println-insert-after)
+;;          ("C-M-p" . println-insert-before)
+;;          ("C-M-n" . println-insert-after)))
 
 (use-package diminish
   :ensure t)
@@ -1332,6 +1384,10 @@ point reaches the beginning or end of the buffer, stop there."
   :bind (("M-o" . other-window)
          ("C-x C-b" . ibuffer)))
 
+(use-package sql-interactive-mode
+  :hook ((sql-interactive-mode . smartparens-mode)
+         (sql-interactive-mode . subword-mode)))
+
 (use-package transpose-frame
   :config
   :bind (:map ctl-x-4-map ("t" . transpose-frame)))
@@ -1397,7 +1453,7 @@ point reaches the beginning or end of the buffer, stop there."
  '(magit-log-arguments
    '("--graph" "--color" "--decorate" "--show-signature" "-n256"))
  '(package-selected-packages
-   '(hydra json-mode ivy counsel transpose-frame info-colors whole-line-or-region lsp-ui lsp-java typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el org octopress markdown-mode key-chord js2-mode inf-mongo hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cask beacon avy anzu ag ace-jump-zap))
+   '(graphql-mode dired-du hydra json-mode ivy counsel transpose-frame info-colors whole-line-or-region lsp-ui lsp-java typescript-mode glsl-mode rg lsp-mode prettier-js ansi feature-mode color-identifiers-mode overseer bookmark+ bookmarks+ dante ialign wgrep-ag idris-mode nodejs-repl mustache-mode package-build shut-up epl git commander dash s iedit psc-ide aggressive-indent engine-mode company-quickhelp company-nixos-options revive expand-region zygospore yaml-mode web-mode use-package suggest smex smartparens shm session scss-mode restclient rainbow-delimiters puppet-mode protobuf-mode projectile popup-imenu play-routes-mode pcre2el octopress markdown-mode key-chord js2-mode inf-mongo hindent highlight-symbol grizzl git-timemachine furl flycheck csv-mode crux company-ghc cask beacon avy anzu ag ace-jump-zap))
  '(safe-local-variable-values
    '((haskell-stylish-on-save)
      (intero-targets "simple-hpack:test:simple-hpack-test")

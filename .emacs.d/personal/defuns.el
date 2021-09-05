@@ -130,7 +130,8 @@ Search for _n_ new _c_ class _t_ trait _o_ object _v_ val _d_ def _y_ type _q_ q
 (defun mini-hook ()
   (if (and
        (functionp 'sbt:find-root)
-       (sbt:find-root)
+       (or (sbt:find-root)
+           (string= default-directory "/Users/pepa/develop-itv/bruce/")) ;; projectile root and sbt root differs for bruce-service differs
        ;;(string-match ".*rg ?(app)*?:.*" (minibuffer-prompt)))
        (string-match ".*rg.*" (minibuffer-prompt)))
       (scala-minibuffer-search/body)))
@@ -368,6 +369,27 @@ Rest client: _s_ last _d_ open _r_ reset _q_ quit"
 
 (defvar gform-last-url (car gform-environments))
 
+;; TODO Rewrite to macro
+(defun resend-last-suppress-response-buffer (prefix-arg)
+  (interactive "p")
+  (when-let ((buffer (seq-some (lambda (buffer)
+                                 (with-current-buffer buffer
+                                   (when (and (stringp mode-name)
+                                              (or (string= mode-name "JSON")
+                                                  (string= mode-name "REST Client")))
+                                     buffer)))
+                               (buffer-list))))
+
+    (with-current-buffer buffer
+      (pcase mode-name
+        ("JSON"
+         (upload-template prefix-arg))
+        ("REST Client"
+         (set-buffer-multibyte nil)
+         (restclient-http-send-current-suppress-response-buffer)
+         (set-buffer-multibyte t)
+         (message "Uploading rest-client buffer %s" (buffer-name buffer)))))))
+
 (defun resend-last (prefix-arg)
   (interactive "p")
   (when-let ((buffer (seq-some (lambda (buffer)
@@ -477,8 +499,8 @@ X-requested-with: foo
     ;;(ivy-toggle-regexp-quote)
     ;;(regexp-quote (replace-regexp-in-string " " "  " selection))
     ;;(regexp-quote selection)
-    selection
-    ))
+    (unless (string= "Recent" selection) ;; Exception for Recent word from magit status buffer
+      selection)))
 
 (defvar look-for-thing-at-point-in-app-only-p t)
 (defvar literal-counsel-rg-p t)
@@ -633,7 +655,7 @@ prompt additionally for EXTRA-AG-ARGS."
                 :caller (or caller 'counsel-ag)))))
 
 
-(defun abc (x)
+(defun whole-project-search (x)
   (when (eq this-command 'ivy-dispatching-done)
     (setq look-for-thing-at-point-in-app-only-p (not look-for-thing-at-point-in-app-only-p))
     (look-for-thing-at-point)))
@@ -648,7 +670,7 @@ prompt additionally for EXTRA-AG-ARGS."
 
 (ivy-set-actions
  'counsel-rg
- '(("m" abc "search in whole project")
+ '(("m" whole-project-search "search in whole project")
    ("l" literal-vanilla-rg-toggle "literal / vanilla rg")))
 
 (defun ivy-switch-buffer-plain ()
@@ -665,3 +687,49 @@ prompt additionally for EXTRA-AG-ARGS."
     (set-window-buffer right messages)
     (with-current-buffer messages
       (set-window-point right (point-max)))))
+
+(defun scala-docs ()
+  (interactive)
+  (let ((libs-versions
+         '(("2.13.5" . "https://www.scala-lang.org/api/2.13.5/index.html")
+           ("2.12.13" . "https://www.scala-lang.org/api/2.12.13/index.html")
+           ("cats" . "https://typelevel.org/cats/api/cats/index.html")
+           ("ce-2" . "https://typelevel.org/cats-effect/api/2.x/")
+           ("ce-3" . "https://typelevel.org/cats-effect/api/3.x/")
+           ("fs2-3.0.1" . "https://javadoc.io/doc/co.fs2/fs2-core_2.13/3.0.1/fs2/index.html"))))
+    (ivy-read "Open docs: " libs-versions
+             :caller 'scala-docs
+             :action (lambda (x)
+                       (eww (cdr x))))))
+
+(defun itv-programme-id-to-api-encoded ()
+  (interactive)
+  (if (use-region-p)
+      (let ((beg (region-beginning))
+            (end (region-end)))
+        (subst-char-in-region beg end ?# ?.)
+        (subst-char-in-region beg end ?/ ?_))
+    (message "No active region.")))
+
+(defun itv-programme-id-from-api-encoded ()
+  (interactive)
+  (if (use-region-p)
+      (let ((beg (region-beginning))
+            (end (region-end)))
+        (subst-char-in-region beg end ?. ?#)
+        (subst-char-in-region beg end ?_ ?/))
+    (message "No active region.")))
+
+
+(defun http-compare-last-two-responses ()
+  (interactive)
+  (let* ((compare-candidates (seq-filter (lambda (buffer)
+                                           (eq 0 (string-match "*HTTP GET" (buffer-name buffer))))
+                                         (buffer-list)))
+         (buffer-a (car compare-candidates))
+         (buffer-b (cadr compare-candidates)))
+
+    (if (and buffer-a buffer-b)
+        (ediff-buffers buffer-a buffer-b)
+      (message "No availabel buffers to compare. Setting to `restclient-same-buffer-response' to nil")
+      (setq restclient-same-buffer-response nil))))
