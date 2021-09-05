@@ -1,0 +1,20 @@
+# -*- mode: snippet -*-
+# name: choice
+# binding: C-c C-v C-c
+# key: choice
+# group: gform
+# --
+`(is-first-object)`{
+  "id": "$1",
+  "label": "$2",
+  "type": "choice",
+  "choices": [
+    "Choice 1",
+    "Choice 2"
+  ],
+  "multivalue": "yes",
+  "optionHelpText": [
+    "Some helptext for choice 1",
+    "Some helptext for choice 2"
+  ]
+}`(is-last-object)`

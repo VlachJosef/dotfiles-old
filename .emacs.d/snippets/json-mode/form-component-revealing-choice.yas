@@ -1,0 +1,38 @@
+# -*- mode: snippet -*-
+# name: revealing choice
+# binding: C-c C-v C-r
+# key: rc
+# group: gform
+# --
+`(is-first-object)`{
+  "id": "$1",
+  "type": "revealingChoice",
+  "label": "Revealing Choice",
+  "choices": [
+    "Chocolate",
+    "Lemon"
+  ],
+  "hints": [
+    "",
+    ""
+  ],
+  "multivalue": "false",
+  "revealingFields": [
+    [
+      {
+        "id": "chocolateServings",
+        "type": "text",
+        "format": "positiveWholeNumber",
+        "label": "Number of servings"
+      }
+    ],
+    [
+      {
+        "id": "lemonServings",
+        "type": "text",
+        "format": "positiveWholeNumber",
+        "label": "Number of servings"
+      }
+    ]
+  ]
+}`(is-last-object)`

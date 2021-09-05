@@ -1,0 +1,33 @@
+# -*- mode: snippet -*-
+# name: add to list section
+# binding: C-c C-v C-a
+# key: atl
+# group: gform
+# --
+`(is-first-object)`{
+  "type": "addToList",
+  "title": "Add To List",
+  "shortName": "Add To List",
+  "summaryName": "Add To List",
+  "description": "",
+  "addAnotherQuestion": {
+    "id": "addToList",
+    "type": "choice",
+    "label": "Add another?",
+    "format": "yesno"
+  },
+  "pages": [
+    {
+      "title": "Page 1",
+      "fields": [
+        $1
+      ]
+    },
+    {
+      "title": "Page 2",
+      "fields": [
+        $2
+      ]
+    }
+  ]
+}`(is-last-object)`

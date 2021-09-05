@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: info - form component
+# binding: C-c C-v C-i
+# key: info
+# group: gform
+# --
+`(is-first-object)`{
+  "id": "$1",
+  "type": "info",
+  "label": "",
+  "infoText": "$2"
+}`(is-last-object)`

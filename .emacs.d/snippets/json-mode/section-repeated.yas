@@ -1,0 +1,18 @@
+# -*- mode: snippet -*-
+# name: repeated section
+# binding: C-c C-v C-r
+# key: section
+# group: gform
+# --
+`(is-first-object)`{
+  "title": "Repeated section Page $n",
+  "repeatsMax": "\${5}",
+  "repeatsMin": "\${5}",
+  "fields": [
+    {
+      "id": "cakeRepeat",
+      "type": "file",
+      "label": "$n Cake Repeat (Optional)"
+    }
+  ]
+}`(is-last-object)`

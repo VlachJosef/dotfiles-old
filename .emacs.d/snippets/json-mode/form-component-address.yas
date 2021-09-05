@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: address - form component
+# binding: C-c C-v C-a
+# key: address
+# group: gform
+# --
+`(is-first-object)`{
+  "id": "$1address",
+  "type": "address",
+  "label": "Address $2"
+}`(is-last-object)`

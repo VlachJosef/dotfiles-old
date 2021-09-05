@@ -1,0 +1,20 @@
+# -*- mode: snippet -*-
+# name: group - form component
+# binding: C-c C-v C-g
+# key: group
+# group: gform
+# --
+`(is-first-object)`{
+  "id" : "$1",
+  "type" : "group",
+  "label" : "",
+  "repeatsMax" : 5,
+  "repeatLabel" : "Group",
+  "repeatAddAnotherText" : "Add another",
+  "fields" : [ {
+    "id" : "$2",
+    "type" : "text",
+    "label" : "Text",
+    "format" : "text(1,15)"
+  } ]
+ }`(is-last-object)`
