@@ -3,8 +3,8 @@
 
 ## How to update
 ```
-vcsh dotfiles add ~/.emacs.d/init.el
-vcsh dotfiles add ~/.emacs.d/personal/defuns.el
-vcsh dotfiles commit -m 'Commit Message'
-vcsh dotfiles push
+vcsh dotfiles-old add ~/.emacs.d/init.el
+vcsh dotfiles-old add ~/.emacs.d/personal/defuns.el
+vcsh dotfiles-old commit -m 'Commit Message'
+vcsh dotfiles-old push
 ```
